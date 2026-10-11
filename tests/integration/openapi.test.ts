@@ -43,11 +43,11 @@ test('each operation lists its inputs and errors', async () => {
   const upload = paths['/files']!.post;
   expect(upload.requestBody.content['application/json'].schema.required).toEqual(expect.arrayContaining(['filename', 'contentType', 'size', 'visibility', 'retentionType']));
   expect(upload.requestBody.content['application/json'].schema.properties.visibility.enum).toEqual(['public', 'private']);
-  expect(Object.keys(upload.responses)).toEqual(['201', '400', '401']);
+  expect(Object.keys(upload.responses)).toEqual(['201', '400', '401', '413', '500']);
 
   const view = paths['/files/{id}']!.get;
   expect(view.parameters).toContainEqual(expect.objectContaining({ name: 'id', in: 'path', required: true }));
-  expect(Object.keys(view.responses)).toEqual(['200', '401', '404']);
+  expect(Object.keys(view.responses)).toEqual(['200', '400', '401', '404', '413', '500']);
 
   const list = paths['/files']!.get;
   expect(list.parameters.filter((p: any) => p.required).map((p: any) => p.name)).toEqual(['system', 'entityType', 'entityId']);

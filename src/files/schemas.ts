@@ -86,7 +86,7 @@ export const variant = z.object({
 
 export const fileResponse = z.object({
   id: z.string().meta({ format: 'uuid' }),
-  status: z.enum(['pending', 'active', 'deleted']),
+  status: z.enum(['pending', 'active']),
   filename: z.string(),
   contentType: z.string(),
   size: z.number().int(),

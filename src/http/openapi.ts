@@ -30,7 +30,9 @@ function operation(name: string, spec: RouteSpec): Json {
       ...(spec.success.schema ? { content: { 'application/json': { schema: jsonSchema(spec.success.schema, 'output') } } } : {}),
     },
   };
-  for (const status of [...spec.errors].sort()) {
+  // Any authenticated route can fail on malformed JSON (400), an oversized body (413) or an unexpected error (500).
+  const errors = spec.open ? spec.errors : [...new Set([...spec.errors, 400, 413, 500])];
+  for (const status of errors.sort((a, b) => a - b)) {
     responses[status] = {
       description: errorDescriptions[status] ?? 'Error.',
       content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },

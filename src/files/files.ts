@@ -6,14 +6,13 @@ import { HttpError } from '../http/errors.ts';
 import type { Bucket, ObjectStore } from '../storage/object-store.ts';
 import { cacheControlFor, createVariants, variantKey } from './variants.ts';
 import { checkRecord, insertLink } from './links.ts';
-import { ALLOWED_TYPES, MAX_SIZE, isUuid } from './schemas.ts';
+import { isUuid } from './schemas.ts';
 import type { editRequest, recordQuery, replacementRequest, uploadRequest } from './schemas.ts';
 import type { z } from 'zod';
 
 export const UPLOAD_ADDRESS_SECONDS = 15 * 60;
 export const PRIVATE_VIEW_SECONDS = 5 * 60;
 export const TEMPORARY_DAYS = 7;
-export { ALLOWED_TYPES, MAX_SIZE };
 
 export interface Caller { systemCode: string; actorId: string | null }
 export interface FileDeps { db: NodePgDatabase; store: ObjectStore; publicBaseUrl: string }
@@ -196,10 +195,9 @@ export async function viewFile(deps: FileDeps, caller: Caller, id: string) {
 export async function listFiles(deps: FileDeps, query: z.output<typeof recordQuery>) {
   await checkRecord(deps.db, query);
   const { page, role } = query;
-  const record = query;
   const matchingLinks = deps.db.select({ id: fileLinks.file_id }).from(fileLinks).where(and(
-    eq(fileLinks.system, record.system), eq(fileLinks.entity_type, record.entityType),
-    eq(fileLinks.entity_id, record.entityId), role === undefined ? undefined : eq(fileLinks.role, role),
+    eq(fileLinks.system, query.system), eq(fileLinks.entity_type, query.entityType),
+    eq(fileLinks.entity_id, query.entityId), role === undefined ? undefined : eq(fileLinks.role, role),
   ));
   const rows = await deps.db.select().from(files).where(and(
     inArray(files.id, matchingLinks), eq(files.status, 'active'), page === undefined ? undefined : gt(files.id, page),
