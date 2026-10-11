@@ -72,7 +72,7 @@ test('an uppercase File id deletes the same stored objects', async () => {
 
 test('an R2 per-object delete failure returns an error and allows retry', async () => {
   const { id } = await uploadText();
-  const app = createApp({ pool: context.pool, publicBaseUrl: 'https://cdn.test', store: new R2ObjectStore({
+  const app = createApp({ pool: context.pool, publicBaseUrl: 'https://cdn.test', cronSecret: 'test-cron-secret', store: new R2ObjectStore({
     accountId: 'test', accessKeyId: 'test', secretAccessKey: 'test', publicBucket: 'public', privateBucket: 'private',
   }) });
   // Fake the external S3 responses, including an HTTP 200 with an object-level failure.
