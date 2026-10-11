@@ -86,8 +86,7 @@ test('Pending, expired and deleted Files stay out of results and cannot change L
   const expired = await upload({ link, retentionType: 'temporary' });
   const deleted = await upload({ link });
   await context.pool.query("UPDATE files SET expires_at = now() - interval '1 second' WHERE id = $1", [expired]);
-  // Until the Delete endpoint is implemented, arrange deletion through the database.
-  await context.pool.query('DELETE FROM files WHERE id = $1', [deleted]);
+  await request(context.app).delete(`/files/${deleted}`).set(headers).expect(204);
   expect((await list()).body.files.map((file: { id: string }) => file.id)).toEqual([active]);
   for (const id of [pending, expired, deleted, 'not-a-uuid', '6f1c1c0e-0000-4000-8000-000000000000']) {
     await request(context.app).post(`/files/${id}/links`).set(headers).send(link).expect(404);

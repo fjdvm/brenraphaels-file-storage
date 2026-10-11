@@ -56,7 +56,10 @@ export class R2ObjectStore implements ObjectStore {
     do {
       const page = await this.client.send(new ListObjectsV2Command({ Bucket: name, Prefix: prefix, ContinuationToken: token }));
       const keys = (page.Contents ?? []).flatMap(object => object.Key ? [{ Key: object.Key }] : []);
-      if (keys.length) await this.client.send(new DeleteObjectsCommand({ Bucket: name, Delete: { Objects: keys } }));
+      if (keys.length) {
+        const result = await this.client.send(new DeleteObjectsCommand({ Bucket: name, Delete: { Objects: keys } }));
+        if (result.Errors?.length) throw new Error('R2 could not delete every File object');
+      }
       token = page.NextContinuationToken;
     } while (token);
   }
