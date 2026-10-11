@@ -6,7 +6,7 @@ Settings the service needs. Names only; never commit values.
 
 | Resource | Name | Notes |
 | --- | --- | --- |
-| R2 bucket (public) | `br-file-storage-public` | Public address (r2.dev or custom domain) enabled |
+| R2 bucket (public) | `br-file-storage-public` | Public address enabled at `https://pub-7cfd914d85cb456bb279755ed3904a66.r2.dev` (r2.dev; verified with a test upload) |
 | R2 bucket (private) | `br-file-storage-private` | No public access; reached via signed addresses only |
 | Neon project | `brenraphaels-file-storage-microservice` | Region `aws-ap-southeast-1` |
 
