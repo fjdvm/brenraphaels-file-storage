@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, uuid, jsonb, bigint } from 'drizzle-orm/pg-core';
+import type { Variant } from '../files/variants.ts';
 export const clientSystems = pgTable('client_systems', { code: text().primaryKey() });
 export const fileAuditEntries = pgTable('file_audit_entries', {
   id: uuid().primaryKey().defaultRandom(), action: text().notNull(), file_id: uuid(),
@@ -16,4 +17,5 @@ export const files = pgTable('files', {
   created_at: timestamp({ withTimezone: true }).defaultNow().notNull(),
   confirmed_at: timestamp({ withTimezone: true }),
   expires_at: timestamp({ withTimezone: true }),
+  variants: jsonb().$type<Variant[]>().notNull().default([]),
 });
