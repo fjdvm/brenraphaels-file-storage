@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { ZodObject, ZodRawShape } from 'zod';
-import { changeLink } from '../files/links.ts';
 import { confirmReplacement, confirmUpload, deleteFile, editFile, listFiles, requestReplacement, requestUpload, viewFile } from '../files/files.ts';
 import type { Caller, FileDeps } from '../files/files.ts';
 import { editRequest, fileId, recordQuery, replacementRequest, uploadRequest } from '../files/schemas.ts';
@@ -35,7 +34,7 @@ function split({ id: fileIdValue, localPath: path, ...body }: Args) {
 export const tools: Tool[] = [
   {
     name: 'request_upload',
-    description: 'Request an address to upload a new File. Run the returned uploadCommand, then call confirm_upload.',
+    description: 'Request an address to upload a new File. Pass localPath so the returned uploadCommand can run as is. Run the returned uploadCommand, then call confirm_upload.',
     input: uploadRequest.extend({ localPath }),
     async run(deps, caller, args) {
       const { localPath: path, ...body } = args;
@@ -72,7 +71,7 @@ export const tools: Tool[] = [
   },
   {
     name: 'replace_file',
-    description: 'Request an address to replace a File\'s contents. Run the returned uploadCommand, then call confirm_replacement.',
+    description: 'Request an address to replace a File\'s contents. Pass localPath so the returned uploadCommand can run as is. Run the returned uploadCommand, then call confirm_replacement.',
     input: z.object({ ...id, ...replacementRequest.shape, localPath }),
     async run(deps, caller, args) {
       const { fileId: target, path, body } = split(args);
