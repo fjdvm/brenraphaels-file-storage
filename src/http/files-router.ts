@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { confirmUpload, requestUpload, viewFile } from '../files/files.ts';
+import { confirmUpload, editFile, requestUpload, viewFile } from '../files/files.ts';
 import type { FileDeps } from '../files/files.ts';
 
 const caller = (res: Response) => ({ systemCode: res.locals.systemCode, actorId: res.locals.actorId });
@@ -16,6 +16,9 @@ export function filesRouter(deps: FileDeps) {
   });
   router.get('/files/:id', async (req, res, next) => {
     try { res.json(await viewFile(deps, caller(res), idOf(req))); } catch (error) { next(error); }
+  });
+  router.patch('/files/:id', async (req, res, next) => {
+    try { res.json(await editFile(deps, caller(res), idOf(req), req.body)); } catch (error) { next(error); }
   });
   return router;
 }

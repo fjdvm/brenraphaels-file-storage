@@ -102,6 +102,36 @@ export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) 
   return present(result, deps);
 }
 
+export async function editFile(deps: FileDeps, caller: Caller, id: string, input: unknown) {
+  if (!isUuid(id)) throw new HttpError(404, 'File not found');
+  const body = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if ('visibility' in body) throw new HttpError(400, 'Visibility cannot be changed after a File is created');
+  if (Object.keys(body).some(field => field !== 'filename' && field !== 'retentionType')) throw new HttpError(400, 'Only filename and retentionType can be edited');
+  if (!('filename' in body) && !('retentionType' in body)) throw new HttpError(400, 'Provide filename or retentionType to edit');
+  const { filename } = body;
+  if ('filename' in body && (typeof filename !== 'string' || !filename.trim())) throw new HttpError(400, 'filename must be a non-empty string');
+  const retentionType = 'retentionType' in body ? oneOf(body, 'retentionType', ['permanent', 'temporary']) : undefined;
+  const edited = await deps.db.transaction(async tx => {
+    const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
+    const now = new Date();
+    if (!row || row.status !== 'active' || (row.expires_at && row.expires_at <= now)) throw new HttpError(404, 'File not found');
+    const changes = {
+      filename: typeof filename === 'string' ? filename.trim() : row.filename,
+      retention_type: retentionType ?? row.retention_type,
+      expires_at: retentionType && retentionType !== row.retention_type
+        ? retentionType === 'temporary' ? new Date(now.getTime() + TEMPORARY_DAYS * 86_400_000) : null
+        : row.expires_at,
+    };
+    const [updated] = await tx.update(files).set(changes).where(eq(files.id, id)).returning();
+    if (!updated) throw new Error('Edited File disappeared while locked');
+    await writeAudit(tx, { action: 'file.edited', fileId: id, ...caller, detail: {
+      filename: updated.filename, retentionType: updated.retention_type, expiresAt: updated.expires_at?.toISOString() ?? null,
+    } });
+    return updated;
+  });
+  return present(edited, deps);
+}
+
 export async function viewFile(deps: FileDeps, caller: Caller, id: string) {
   const { db } = deps;
   const [row] = isUuid(id)
