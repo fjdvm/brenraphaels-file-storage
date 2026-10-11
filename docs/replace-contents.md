@@ -13,7 +13,7 @@ A mismatch returns 422, deletes the staging object, clears the request and leave
 Confirming with nothing requested or uploaded returns 409. An abandoned request changes nothing.
 Supplying `visibility` returns 400: Visibility never changes. Pending, expired and unknown Files return 404.
 
-Public originals and Variants are stored with `Cache-Control: public, max-age=300`, so a replaced picture shows
+Public originals (set on confirm and on replace) and Variants are stored with `Cache-Control: public, max-age=300`, so a replaced picture shows
 within about 5 minutes. Audit entries: `file.replacement_requested`, `file.replaced`, `file.replacement_rejected`.
 
 Apply migration `0005_replacement.sql` before deploying.

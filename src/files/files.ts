@@ -94,6 +94,8 @@ export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) 
       return new HttpError(422, 'Uploaded object does not match the declared size or type; it was removed');
     }
 
+    const cacheControl = cacheControlFor(bucketOf(row));
+    if (cacheControl) await store.copy(bucketOf(row), keyOf(row.id), keyOf(row.id), { contentType: row.content_type, cacheControl });
     const variants = await createVariants(store, bucketOf(row), row.id, row.content_type);
     const now = new Date();
     const expiresAt = row.retention_type === 'temporary' ? new Date(now.getTime() + TEMPORARY_DAYS * 86_400_000) : null;

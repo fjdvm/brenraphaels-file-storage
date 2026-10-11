@@ -48,6 +48,11 @@ test('replacing a File keeps its id and address, swaps the bytes and regenerates
   expect(await audits('file.replaced')).toEqual([{ system_code: 'POS', file_id: file.id }]);
 });
 
+test('a first upload of a public File also gets the short cache lifetime', async () => {
+  const file = await activeFile(await picture(300, 'red'));
+  expect(store.objects.get(`public/${file.id}/original`)!.cacheControl).toBe('public, max-age=300');
+});
+
 test('public objects get a short cache lifetime; private ones do not', async () => {
   const pub = await activeFile(await picture(300, 'red'));
   const bytes = await picture(200, 'blue');
