@@ -1,10 +1,11 @@
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { files } from '../db/schema.ts';
+import { fileLinks, files } from '../db/schema.ts';
 import { writeAudit } from '../audit/write-audit.ts';
 import { HttpError } from '../http/errors.ts';
 import type { Bucket, ObjectStore } from '../storage/object-store.ts';
 import { createVariants, variantKey } from './variants.ts';
+import { insertLink, parseLink, parseRecord, requiredText } from './links.ts';
 
 export const MAX_SIZE = 25 * 1024 * 1024;
 export const UPLOAD_ADDRESS_SECONDS = 15 * 60;
@@ -59,13 +60,17 @@ export async function requestUpload(deps: FileDeps, caller: Caller, input: unkno
   if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) throw new HttpError(400, 'size must be a positive number of bytes');
   if (size > MAX_SIZE) throw new HttpError(400, 'size must be 25 MB or less');
 
-  const [row] = await db.insert(files).values({
-    filename: filename.trim(), content_type: contentType, size, visibility, retention_type: retentionType, created_by_system: caller.systemCode,
-  }).returning();
-  if (!row) throw new Error('Insert returned no row');
-  const uploadUrl = await store.presignPut(bucketOf(row), keyOf(row.id), { contentType, expiresInSeconds: UPLOAD_ADDRESS_SECONDS });
-  await writeAudit(db, { action: 'file.requested', fileId: row.id, ...caller, detail: { filename: row.filename, contentType, size, visibility, retentionType } });
-  return { ...await present(row, deps), uploadUrl, uploadUrlExpiresInSeconds: UPLOAD_ADDRESS_SECONDS };
+  const link = body.link === undefined ? undefined : await parseLink(db, body.link);
+  return db.transaction(async tx => {
+    const [row] = await tx.insert(files).values({
+      filename: filename.trim(), content_type: contentType, size, visibility, retention_type: retentionType, created_by_system: caller.systemCode,
+    }).returning();
+    if (!row) throw new Error('Insert returned no row');
+    const uploadUrl = await store.presignPut(bucketOf(row), keyOf(row.id), { contentType, expiresInSeconds: UPLOAD_ADDRESS_SECONDS });
+    await writeAudit(tx, { action: 'file.requested', fileId: row.id, ...caller, detail: { filename: row.filename, contentType, size, visibility, retentionType } });
+    if (link) await insertLink(tx, caller, row.id, link);
+    return { ...await present(row, deps), uploadUrl, uploadUrlExpiresInSeconds: UPLOAD_ADDRESS_SECONDS };
+  });
 }
 
 export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) {
@@ -141,4 +146,24 @@ export async function viewFile(deps: FileDeps, caller: Caller, id: string) {
   const url = await address(deps, row, keyOf(row.id));
   await writeAudit(db, { action: 'file.viewed', fileId: row.id, ...caller });
   return { ...await present(row, deps), url };
+}
+
+export async function listFiles(deps: FileDeps, query: Record<string, unknown>) {
+  const record = await parseRecord(deps.db, query);
+  const page = query.page;
+  if (page !== undefined && (typeof page !== 'string' || !isUuid(page))) throw new HttpError(400, 'page must be a File id from nextPage');
+  const role = query.role === undefined ? undefined : requiredText(query, 'role');
+  const matchingLinks = deps.db.select({ id: fileLinks.file_id }).from(fileLinks).where(and(
+    eq(fileLinks.system, record.system), eq(fileLinks.entity_type, record.entityType),
+    eq(fileLinks.entity_id, record.entityId), role === undefined ? undefined : eq(fileLinks.role, role),
+  ));
+  const rows = await deps.db.select().from(files).where(and(
+    inArray(files.id, matchingLinks), eq(files.status, 'active'), page === undefined ? undefined : gt(files.id, page),
+    or(isNull(files.expires_at), gt(files.expires_at, new Date())),
+  )).orderBy(files.id).limit(51);
+  const pageRows = rows.slice(0, 50);
+  return {
+    files: await Promise.all(pageRows.map(row => present(row, deps))),
+    nextPage: rows.length > 50 ? pageRows[49]!.id : null,
+  };
 }

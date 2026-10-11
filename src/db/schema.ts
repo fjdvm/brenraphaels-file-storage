@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb, bigint } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, jsonb, bigint, primaryKey, index } from 'drizzle-orm/pg-core';
 import type { Variant } from '../files/variants.ts';
 export const clientSystems = pgTable('client_systems', { code: text().primaryKey() });
 export const fileAuditEntries = pgTable('file_audit_entries', {
@@ -19,3 +19,12 @@ export const files = pgTable('files', {
   expires_at: timestamp({ withTimezone: true }),
   variants: jsonb().$type<Variant[]>().notNull().default([]),
 });
+
+export const fileLinks = pgTable('file_links', {
+  file_id: uuid().notNull().references(() => files.id, { onDelete: 'cascade' }),
+  system: text().notNull().references(() => clientSystems.code),
+  entity_type: text().notNull(), entity_id: text().notNull(), role: text().notNull(),
+}, table => [
+  primaryKey({ columns: [table.file_id, table.system, table.entity_type, table.entity_id, table.role] }),
+  index('file_links_record').on(table.system, table.entity_type, table.entity_id, table.role, table.file_id),
+]);
