@@ -40,12 +40,15 @@ export class R2ObjectStore implements ObjectStore {
       throw error;
     }
   }
-  async put(bucket: Bucket, key: string, body: Uint8Array, contentType: string) {
-    await this.client.send(new PutObjectCommand({ Bucket: this.buckets[bucket], Key: key, Body: body, ContentType: contentType }));
+  async put(bucket: Bucket, key: string, body: Uint8Array, contentType: string, cacheControl?: string) {
+    await this.client.send(new PutObjectCommand({ Bucket: this.buckets[bucket], Key: key, Body: body, ContentType: contentType, CacheControl: cacheControl }));
   }
-  async copy(bucket: Bucket, fromKey: string, toKey: string) {
+  async copy(bucket: Bucket, fromKey: string, toKey: string, options?: { contentType: string; cacheControl: string }) {
     const name = this.buckets[bucket];
-    await this.client.send(new CopyObjectCommand({ Bucket: name, Key: toKey, CopySource: `${name}/${fromKey}` }));
+    await this.client.send(new CopyObjectCommand({
+      Bucket: name, Key: toKey, CopySource: `${name}/${fromKey}`,
+      ...(options && { MetadataDirective: 'REPLACE', ContentType: options.contentType, CacheControl: options.cacheControl }),
+    }));
   }
   async delete(bucket: Bucket, key: string) {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.buckets[bucket], Key: key }));

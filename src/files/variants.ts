@@ -8,6 +8,9 @@ export interface Variant {
 
 const sizes = { small: 150, medium: 600, large: 1200 } as const;
 const pictureTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// Public objects are cached by the CDN and browsers for at most this long, so a replaced picture shows within about 5 minutes.
+export const PUBLIC_CACHE_CONTROL = 'public, max-age=300';
+export const cacheControlFor = (bucket: Bucket) => bucket === 'public' ? PUBLIC_CACHE_CONTROL : undefined;
 export const variantKey = (id: string, name: Variant['name']) => `${id}/${name}.webp`;
 
 export async function createVariants(store: ObjectStore, bucket: Bucket, id: string, contentType: string): Promise<Variant[]> {
@@ -24,7 +27,7 @@ export async function createVariants(store: ObjectStore, bucket: Bucket, id: str
   for (const name of names) {
     try {
       const body = await sharp(original).rotate().resize({ width: sizes[name], height: sizes[name], fit: 'inside', withoutEnlargement: true }).webp().toBuffer();
-      await store.put(bucket, variantKey(id, name), body, 'image/webp');
+      await store.put(bucket, variantKey(id, name), body, 'image/webp', cacheControlFor(bucket));
       variants.push({ name, status: 'ready' });
     } catch {
       variants.push({ name, status: 'failed' });

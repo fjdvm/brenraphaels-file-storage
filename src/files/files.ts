@@ -4,7 +4,7 @@ import { fileLinks, files } from '../db/schema.ts';
 import { writeAudit } from '../audit/write-audit.ts';
 import { HttpError } from '../http/errors.ts';
 import type { Bucket, ObjectStore } from '../storage/object-store.ts';
-import { createVariants, variantKey } from './variants.ts';
+import { cacheControlFor, createVariants, variantKey } from './variants.ts';
 import { insertLink, parseLink, parseRecord, requiredText } from './links.ts';
 
 export const MAX_SIZE = 25 * 1024 * 1024;
@@ -24,6 +24,7 @@ export interface FileDeps { db: NodePgDatabase; store: ObjectStore; publicBaseUr
 type Row = typeof files.$inferSelect;
 const bucketOf = (row: Pick<Row, 'visibility'>): Bucket => row.visibility;
 const keyOf = (id: string) => `${id}/original`;
+const stagingKeyOf = (id: string) => `${id}/replacement`;
 const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 function address({ store, publicBaseUrl }: FileDeps, row: Row, key: string) {
@@ -85,7 +86,6 @@ export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) 
 
     const found = await store.head(bucketOf(row), keyOf(row.id));
     if (!found) return new HttpError(409, 'No uploaded object found; upload to the signed address first');
-    const baseType = (type: string) => type.split(';')[0]?.trim().toLowerCase();
     if (found.size !== row.size || baseType(found.contentType) !== baseType(row.content_type)) {
       await tx.delete(files).where(eq(files.id, row.id));
       await store.delete(bucketOf(row), keyOf(row.id));
@@ -102,6 +102,64 @@ export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) 
     if (!active) throw new Error('Confirmed File disappeared while locked');
     await writeAudit(tx, { action: 'file.confirmed', fileId: row.id, ...caller });
     return active;
+  });
+  if (result instanceof HttpError) throw result;
+  return present(result, deps);
+}
+
+const baseType = (type: string) => type.split(';')[0]?.trim().toLowerCase();
+const isLive = (row: Row | undefined): row is Row => !!row && row.status === 'active' && !(row.expires_at && row.expires_at <= new Date());
+
+export async function requestReplacement(deps: FileDeps, caller: Caller, id: string, input: unknown) {
+  const { db, store } = deps;
+  if (!isUuid(id)) throw new HttpError(404, 'File not found');
+  const body = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if ('visibility' in body) throw new HttpError(400, 'Visibility cannot be changed after a File is created');
+  const { contentType, size } = body;
+  if (typeof contentType !== 'string' || !ALLOWED_TYPES.has(contentType)) throw new HttpError(400, 'contentType is not an allowed file type');
+  if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) throw new HttpError(400, 'size must be a positive number of bytes');
+  if (size > MAX_SIZE) throw new HttpError(400, 'size must be 25 MB or less');
+  return db.transaction(async tx => {
+    const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
+    if (!isLive(row)) throw new HttpError(404, 'File not found');
+    const [updated] = await tx.update(files).set({ replacement: { contentType, size } }).where(eq(files.id, id)).returning();
+    if (!updated) throw new Error('File disappeared while locked');
+    const uploadUrl = await store.presignPut(bucketOf(row), stagingKeyOf(id), { contentType, expiresInSeconds: UPLOAD_ADDRESS_SECONDS });
+    await writeAudit(tx, { action: 'file.replacement_requested', fileId: id, ...caller, detail: { contentType, size } });
+    return { ...await present(updated, deps), uploadUrl, uploadUrlExpiresInSeconds: UPLOAD_ADDRESS_SECONDS };
+  });
+}
+
+export async function confirmReplacement(deps: FileDeps, caller: Caller, id: string) {
+  const { db, store } = deps;
+  if (!isUuid(id)) throw new HttpError(404, 'File not found');
+  const result = await db.transaction(async tx => {
+    const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
+    if (!isLive(row)) return new HttpError(404, 'File not found');
+    const bucket = bucketOf(row);
+    const declared = row.replacement;
+    if (!declared) return new HttpError(409, 'No replacement has been requested');
+    const found = await store.head(bucket, stagingKeyOf(id));
+    if (!found) return new HttpError(409, 'No uploaded replacement found; upload to the signed address first');
+    if (found.size !== declared.size || baseType(found.contentType) !== baseType(declared.contentType)) {
+      await store.delete(bucket, stagingKeyOf(id));
+      await tx.update(files).set({ replacement: null }).where(eq(files.id, id));
+      await writeAudit(tx, { action: 'file.replacement_rejected', fileId: id, ...caller, detail: { declared, found } });
+      // Return the rejection so the cleared request commits before the HTTP error is thrown.
+      return new HttpError(422, 'Uploaded replacement does not match the declared size or type; it was removed and the File is unchanged');
+    }
+
+    await store.copy(bucket, stagingKeyOf(id), keyOf(id), { contentType: declared.contentType, cacheControl: cacheControlFor(bucket) ?? 'private' });
+    await store.delete(bucket, stagingKeyOf(id));
+    const variants = await createVariants(store, bucket, id, declared.contentType);
+    for (const old of row.variants) if (!variants.some(variant => variant.name === old.name)) await store.delete(bucket, variantKey(id, old.name));
+    const [updated] = await tx.update(files).set({ content_type: declared.contentType, size: declared.size, variants, replacement: null })
+      .where(eq(files.id, id)).returning();
+    if (!updated) throw new Error('Replaced File disappeared while locked');
+    await writeAudit(tx, { action: 'file.replaced', fileId: id, ...caller, detail: {
+      previous: { contentType: row.content_type, size: row.size }, contentType: declared.contentType, size: declared.size,
+    } });
+    return updated;
   });
   if (result instanceof HttpError) throw result;
   return present(result, deps);

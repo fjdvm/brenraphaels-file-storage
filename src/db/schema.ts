@@ -18,6 +18,7 @@ export const files = pgTable('files', {
   confirmed_at: timestamp({ withTimezone: true }),
   expires_at: timestamp({ withTimezone: true }),
   variants: jsonb().$type<Variant[]>().notNull().default([]),
+  replacement: jsonb().$type<{ contentType: string; size: number }>(),
 });
 
 export const fileLinks = pgTable('file_links', {
