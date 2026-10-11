@@ -5,18 +5,15 @@ import { writeAudit } from '../audit/write-audit.ts';
 import { HttpError } from '../http/errors.ts';
 import type { Bucket, ObjectStore } from '../storage/object-store.ts';
 import { cacheControlFor, createVariants, variantKey } from './variants.ts';
-import { insertLink, parseLink, parseRecord, requiredText } from './links.ts';
+import { checkRecord, insertLink } from './links.ts';
+import { ALLOWED_TYPES, MAX_SIZE, isUuid } from './schemas.ts';
+import type { editRequest, recordQuery, replacementRequest, uploadRequest } from './schemas.ts';
+import type { z } from 'zod';
 
-export const MAX_SIZE = 25 * 1024 * 1024;
 export const UPLOAD_ADDRESS_SECONDS = 15 * 60;
 export const PRIVATE_VIEW_SECONDS = 5 * 60;
 export const TEMPORARY_DAYS = 7;
-export const ALLOWED_TYPES = new Set([
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-  'application/pdf', 'text/plain', 'text/csv',
-  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-]);
+export { ALLOWED_TYPES, MAX_SIZE };
 
 export interface Caller { systemCode: string; actorId: string | null }
 export interface FileDeps { db: NodePgDatabase; store: ObjectStore; publicBaseUrl: string }
@@ -25,7 +22,6 @@ type Row = typeof files.$inferSelect;
 const bucketOf = (row: Pick<Row, 'visibility'>): Bucket => row.visibility;
 const keyOf = (id: string) => `${id}/original`;
 const stagingKeyOf = (id: string) => `${id}/replacement`;
-const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 function address({ store, publicBaseUrl }: FileDeps, row: Row, key: string) {
   return row.visibility === 'public'
@@ -43,28 +39,13 @@ async function present(row: Row, deps: FileDeps) {
   };
 }
 
-function oneOf<T extends string>(body: Record<string, unknown>, field: string, allowed: readonly T[]): T {
-  const value = body[field];
-  if (value === undefined || value === null || value === '') throw new HttpError(400, `${field} is required (${allowed.join(' or ')})`);
-  if (!allowed.includes(value as T)) throw new HttpError(400, `${field} must be ${allowed.join(' or ')}`);
-  return value as T;
-}
-
-export async function requestUpload(deps: FileDeps, caller: Caller, input: unknown) {
+export async function requestUpload(deps: FileDeps, caller: Caller, input: z.output<typeof uploadRequest>) {
   const { db, store } = deps;
-  const body = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
-  const visibility = oneOf(body, 'visibility', ['public', 'private']);
-  const retentionType = oneOf(body, 'retentionType', ['permanent', 'temporary']);
-  const { filename, contentType, size } = body;
-  if (typeof filename !== 'string' || !filename.trim()) throw new HttpError(400, 'filename is required');
-  if (typeof contentType !== 'string' || !ALLOWED_TYPES.has(contentType)) throw new HttpError(400, 'contentType is not an allowed file type');
-  if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) throw new HttpError(400, 'size must be a positive number of bytes');
-  if (size > MAX_SIZE) throw new HttpError(400, 'size must be 25 MB or less');
-
-  const link = body.link === undefined ? undefined : await parseLink(db, body.link);
+  const { filename, contentType, size, visibility, retentionType, link } = input;
+  if (link) await checkRecord(db, link);
   return db.transaction(async tx => {
     const [row] = await tx.insert(files).values({
-      filename: filename.trim(), content_type: contentType, size, visibility, retention_type: retentionType, created_by_system: caller.systemCode,
+      filename, content_type: contentType, size, visibility, retention_type: retentionType, created_by_system: caller.systemCode,
     }).returning();
     if (!row) throw new Error('Insert returned no row');
     const uploadUrl = await store.presignPut(bucketOf(row), keyOf(row.id), { contentType, expiresInSeconds: UPLOAD_ADDRESS_SECONDS });
@@ -112,15 +93,10 @@ export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) 
 const baseType = (type: string) => type.split(';')[0]?.trim().toLowerCase();
 const isLive = (row: Row | undefined): row is Row => !!row && row.status === 'active' && !(row.expires_at && row.expires_at <= new Date());
 
-export async function requestReplacement(deps: FileDeps, caller: Caller, id: string, input: unknown) {
+export async function requestReplacement(deps: FileDeps, caller: Caller, id: string, input: z.output<typeof replacementRequest>) {
   const { db, store } = deps;
   if (!isUuid(id)) throw new HttpError(404, 'File not found');
-  const body = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
-  if ('visibility' in body) throw new HttpError(400, 'Visibility cannot be changed after a File is created');
-  const { contentType, size } = body;
-  if (typeof contentType !== 'string' || !ALLOWED_TYPES.has(contentType)) throw new HttpError(400, 'contentType is not an allowed file type');
-  if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) throw new HttpError(400, 'size must be a positive number of bytes');
-  if (size > MAX_SIZE) throw new HttpError(400, 'size must be 25 MB or less');
+  const { contentType, size } = input;
   return db.transaction(async tx => {
     const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
     if (!isLive(row)) throw new HttpError(404, 'File not found');
@@ -167,21 +143,15 @@ export async function confirmReplacement(deps: FileDeps, caller: Caller, id: str
   return present(result, deps);
 }
 
-export async function editFile(deps: FileDeps, caller: Caller, id: string, input: unknown) {
+export async function editFile(deps: FileDeps, caller: Caller, id: string, input: z.output<typeof editRequest>) {
   if (!isUuid(id)) throw new HttpError(404, 'File not found');
-  const body = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
-  if ('visibility' in body) throw new HttpError(400, 'Visibility cannot be changed after a File is created');
-  if (Object.keys(body).some(field => field !== 'filename' && field !== 'retentionType')) throw new HttpError(400, 'Only filename and retentionType can be edited');
-  if (!('filename' in body) && !('retentionType' in body)) throw new HttpError(400, 'Provide filename or retentionType to edit');
-  const { filename } = body;
-  if ('filename' in body && (typeof filename !== 'string' || !filename.trim())) throw new HttpError(400, 'filename must be a non-empty string');
-  const retentionType = 'retentionType' in body ? oneOf(body, 'retentionType', ['permanent', 'temporary']) : undefined;
+  const { filename, retentionType } = input;
   const edited = await deps.db.transaction(async tx => {
     const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
     const now = new Date();
     if (!row || row.status !== 'active' || (row.expires_at && row.expires_at <= now)) throw new HttpError(404, 'File not found');
     const changes = {
-      filename: typeof filename === 'string' ? filename.trim() : row.filename,
+      filename: filename ?? row.filename,
       retention_type: retentionType ?? row.retention_type,
       expires_at: retentionType && retentionType !== row.retention_type
         ? retentionType === 'temporary' ? new Date(now.getTime() + TEMPORARY_DAYS * 86_400_000) : null
@@ -223,11 +193,10 @@ export async function viewFile(deps: FileDeps, caller: Caller, id: string) {
   return { ...await present(row, deps), url };
 }
 
-export async function listFiles(deps: FileDeps, query: Record<string, unknown>) {
-  const record = await parseRecord(deps.db, query);
-  const page = query.page;
-  if (page !== undefined && (typeof page !== 'string' || !isUuid(page))) throw new HttpError(400, 'page must be a File id from nextPage');
-  const role = query.role === undefined ? undefined : requiredText(query, 'role');
+export async function listFiles(deps: FileDeps, query: z.output<typeof recordQuery>) {
+  await checkRecord(deps.db, query);
+  const { page, role } = query;
+  const record = query;
   const matchingLinks = deps.db.select({ id: fileLinks.file_id }).from(fileLinks).where(and(
     eq(fileLinks.system, record.system), eq(fileLinks.entity_type, record.entityType),
     eq(fileLinks.entity_id, record.entityId), role === undefined ? undefined : eq(fileLinks.role, role),
