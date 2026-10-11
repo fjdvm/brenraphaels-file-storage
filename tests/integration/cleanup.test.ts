@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import request from 'supertest';
+import sharp from 'sharp';
 import type { Pool } from 'pg';
 import { createTestApp } from '../support/test-app.ts';
 import type { FakeR2 } from '../support/fake-r2.ts';
@@ -72,6 +73,29 @@ test('a stale replacement staging object is discarded and the File is unchanged'
   expect((await pool.query('SELECT replacement FROM files WHERE id = $1', [id])).rows[0].replacement).toBeNull();
   expect(await status(id)).toBe('active');
   expect(await audits('file.replacement_discarded')).toEqual([{ system_code: 'CRON', actor_id: 'cron', file_id: id }]);
+});
+
+test('a replacement requested before times were recorded is stamped, not discarded, then discarded once stale', async () => {
+  const id = await add('permanent');
+  const requested = await request(app).post(`/files/${id}/replacement`).set(as).send({ contentType: 'text/plain', size: 2 }).expect(201);
+  store.upload(requested.body.uploadUrl, new Uint8Array([9, 9]), 'text/plain');
+  await pool.query("UPDATE files SET replacement = replacement - 'requestedAt' WHERE id = $1", [id]);
+  await request(app).get('/cron/cleanup').set(cron).expect(200);
+  expect(store.objects.has(`public/${id}/replacement`)).toBe(true);
+  expect((await pool.query('SELECT replacement FROM files WHERE id = $1', [id])).rows[0].replacement.requestedAt).toBeTruthy();
+});
+
+test('an expired Temporary picture loses its Variants too', async () => {
+  const bytes = await sharp({ create: { width: 200, height: 100, channels: 3, background: 'red' } }).png().toBuffer();
+  const requested = await request(app).post('/files').set(as).send({
+    filename: 'p.png', contentType: 'image/png', size: bytes.length, visibility: 'private', retentionType: 'temporary',
+  }).expect(201);
+  store.upload(requested.body.uploadUrl, bytes, 'image/png');
+  await request(app).post(`/files/${requested.body.id}/confirm`).set(as).expect(200);
+  expect([...store.objects.keys()].filter(key => key.startsWith(`private/${requested.body.id}/`))).toHaveLength(4);
+  await age(requested.body.id, '8 days');
+  await request(app).get('/cron/cleanup').set(cron).expect(200);
+  expect([...store.objects.keys()].filter(key => key.startsWith(`private/${requested.body.id}/`))).toEqual([]);
 });
 
 test.each([[{}], [{ Authorization: 'Bearer wrong' }], [{ Authorization: 'test-cron-secret' }]])('a call without the secret is refused and changes nothing (%j)', async headers => {
