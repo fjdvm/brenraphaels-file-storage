@@ -7,8 +7,8 @@ export interface ObjectStore {
   presignGet(bucket: Bucket, key: string, options: { expiresInSeconds: number }): Promise<string>;
   head(bucket: Bucket, key: string): Promise<ObjectInfo | null>;
   get(bucket: Bucket, key: string): Promise<Uint8Array | null>;
-  put(bucket: Bucket, key: string, body: Uint8Array, contentType: string): Promise<void>;
-  copy(bucket: Bucket, fromKey: string, toKey: string): Promise<void>;
+  put(bucket: Bucket, key: string, body: Uint8Array, contentType: string, cacheControl?: string): Promise<void>;
+  copy(bucket: Bucket, fromKey: string, toKey: string, options?: { contentType: string; cacheControl: string }): Promise<void>;
   delete(bucket: Bucket, key: string): Promise<void>;
   deletePrefix(bucket: Bucket, prefix: string): Promise<void>;
 }

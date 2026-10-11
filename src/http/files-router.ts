@@ -1,7 +1,7 @@
 import { changeLink } from '../files/links.ts';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { confirmUpload, deleteFile, editFile, listFiles, requestUpload, viewFile } from '../files/files.ts';
+import { confirmReplacement, confirmUpload, deleteFile, editFile, listFiles, requestReplacement, requestUpload, viewFile } from '../files/files.ts';
 import type { FileDeps } from '../files/files.ts';
 
 const caller = (res: Response) => ({ systemCode: res.locals.systemCode, actorId: res.locals.actorId });
@@ -14,6 +14,12 @@ export function filesRouter(deps: FileDeps) {
   });
   router.post('/files/:id/confirm', async (req, res, next) => {
     try { res.json(await confirmUpload(deps, caller(res), idOf(req))); } catch (error) { next(error); }
+  });
+  router.post('/files/:id/replacement', async (req, res, next) => {
+    try { res.status(201).json(await requestReplacement(deps, caller(res), idOf(req), req.body)); } catch (error) { next(error); }
+  });
+  router.post('/files/:id/replacement/confirm', async (req, res, next) => {
+    try { res.json(await confirmReplacement(deps, caller(res), idOf(req))); } catch (error) { next(error); }
   });
   router.get('/files/:id', async (req, res, next) => {
     try { res.json(await viewFile(deps, caller(res), idOf(req))); } catch (error) { next(error); }
