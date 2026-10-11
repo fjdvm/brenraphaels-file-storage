@@ -22,6 +22,95 @@ async function audits(action: string) {
   return (await pool.query('SELECT system_code, actor_id, file_id FROM file_audit_entries WHERE action = $1', [action])).rows;
 }
 
+async function activeFile(change: object = {}) {
+  const requested = await requestUpload({ ...valid, ...change });
+  store.upload(requested.body.uploadUrl, png, 'image/png');
+  return (await request(app).post(`/files/${requested.body.id}/confirm`).set(as('IMS'))).body;
+}
+
+test('a Client System edits another system’s File filename and records the edit', async () => {
+  const file = await activeFile();
+  const edited = await request(app).patch(`/files/${file.id}`).set(as('POS')).send({ filename: ' renamed.png ' });
+  expect(edited.status).toBe(200);
+  expect(edited.body).toMatchObject({ filename: 'renamed.png', retentionType: 'permanent', expiresAt: null });
+  const viewed = await request(app).get(`/files/${file.id}`).set(as('ECOM'));
+  expect(viewed.body.filename).toBe('renamed.png');
+  expect(await audits('file.edited')).toEqual([{ system_code: 'POS', actor_id: 'user-1', file_id: file.id }]);
+});
+
+test('a Temporary File can be promoted and demoted with expiry seven days from the change', async () => {
+  const file = await activeFile({ retentionType: 'temporary' });
+  const promoted = await request(app).patch(`/files/${file.id}`).set(as('POS')).send({ retentionType: 'permanent' });
+  expect(promoted.status).toBe(200);
+  expect(promoted.body).toMatchObject({ retentionType: 'permanent', expiresAt: null });
+  expect((await request(app).get(`/files/${file.id}`).set(as('IMS'))).body.expiresAt).toBeNull();
+  const before = Date.now();
+  const demoted = await request(app).patch(`/files/${file.id}`).set(as('HRMS')).send({ retentionType: 'temporary', filename: 'temporary.png' });
+  expect(demoted.status).toBe(200);
+  expect(demoted.body).toMatchObject({ filename: 'temporary.png', retentionType: 'temporary' });
+  expect(new Date(demoted.body.expiresAt).getTime()).toBeGreaterThanOrEqual(before + 604_800_000);
+  expect(new Date(demoted.body.expiresAt).getTime()).toBeLessThanOrEqual(Date.now() + 604_800_000);
+  expect((await request(app).get(`/files/${file.id}`).set(as('IMS'))).body.expiresAt).toBe(demoted.body.expiresAt);
+  expect(await audits('file.edited')).toEqual([
+    { system_code: 'POS', actor_id: 'user-1', file_id: file.id },
+    { system_code: 'HRMS', actor_id: 'user-1', file_id: file.id },
+  ]);
+});
+
+test('a Visibility change is clearly refused without applying any edit', async () => {
+  const file = await activeFile();
+  const response = await request(app).patch(`/files/${file.id}`).set(as('POS')).send({ visibility: 'private', filename: 'wrong.png' });
+  expect(response.status).toBe(400);
+  expect(response.body.error).toMatch(/visibility.*cannot be changed/i);
+  const viewed = await request(app).get(`/files/${file.id}`).set(as('IMS'));
+  expect(viewed.body).toMatchObject({ filename: 'cover.png', visibility: 'public' });
+  expect(await audits('file.edited')).toHaveLength(0);
+});
+
+test.each([
+  {}, { contentType: 'text/plain' }, { filename: '   ' }, { filename: null },
+  { retentionType: 'forever' }, { retentionType: null }, [],
+].map(body => [body]))('refuses invalid edit %j without changing the File or writing an edit audit', async body => {
+  const file = await activeFile();
+  const response = await request(app).patch(`/files/${file.id}`).set(as('POS')).send(body);
+  expect(response.status).toBe(400);
+  expect(response.body.error).toEqual(expect.any(String));
+  expect((await request(app).get(`/files/${file.id}`).set(as('IMS'))).body).toMatchObject({ filename: 'cover.png', retentionType: 'permanent' });
+  expect(await audits('file.edited')).toHaveLength(0);
+});
+
+test('editing a Temporary File without changing Retention type preserves its expiry and address', async () => {
+  const file = await activeFile({ retentionType: 'temporary', visibility: 'private' });
+  const viewed = await request(app).get(`/files/${file.id}`).set(as('IMS'));
+  const edited = await request(app).patch(`/files/${file.id}`).set(as('POS')).send({ filename: 'renamed.png', retentionType: 'temporary' });
+  expect(edited.status).toBe(200);
+  expect(edited.body).toMatchObject({ expiresAt: file.expiresAt, visibility: 'private', variants: file.variants });
+  expect((await request(app).get(`/files/${file.id}`).set(as('IMS'))).body.url).toBe(viewed.body.url);
+});
+
+test('Pending, expired, missing and malformed Files cannot be edited', async () => {
+  const pending = await requestUpload();
+  const expired = await activeFile({ retentionType: 'temporary' });
+  await pool.query("UPDATE files SET expires_at = now() - interval '1 second' WHERE id = $1", [expired.id]);
+  for (const id of [pending.body.id, expired.id, 'not-a-uuid', '6f1c1c0e-0000-4000-8000-000000000000']) {
+    const response = await request(app).patch(`/files/${id}`).set(as('POS')).send({ retentionType: 'permanent' });
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe('File not found');
+  }
+  expect(await audits('file.edited')).toHaveLength(0);
+});
+
+test('concurrent filename and Retention type edits both remain visible', async () => {
+  const file = await activeFile();
+  const responses = await Promise.all([
+    request(app).patch(`/files/${file.id}`).set(as('POS')).send({ filename: 'renamed.png' }),
+    request(app).patch(`/files/${file.id}`).set(as('HRMS')).send({ retentionType: 'temporary' }),
+  ]);
+  expect(responses.map(response => response.status)).toEqual([200, 200]);
+  expect((await request(app).get(`/files/${file.id}`).set(as('IMS'))).body).toMatchObject({ filename: 'renamed.png', retentionType: 'temporary', expiresAt: expect.any(String) });
+  expect(await audits('file.edited')).toHaveLength(2);
+});
+
 test('a Public File goes through request, upload, confirm and view', async () => {
   const requested = await requestUpload();
   expect(requested.status).toBe(201);
