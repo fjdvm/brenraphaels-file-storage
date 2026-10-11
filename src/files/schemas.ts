@@ -110,6 +110,13 @@ export const fileListResponse = z.object({
   nextPage: z.string().nullable().describe('Pass as `page` to get the next 50 Files; null on the last page.'),
 });
 
+export const cleanupResponse = z.object({
+  expiredDeleted: z.number().int(),
+  pendingDiscarded: z.number().int(),
+  replacementsDiscarded: z.number().int(),
+  failures: z.number().int().describe('Objects that could not be removed; the run answers 500 when above zero.'),
+});
+
 export const healthResponse = z.object({ status: z.literal('ok') });
 
 export const errorResponse = z.object({

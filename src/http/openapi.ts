@@ -40,7 +40,7 @@ function operation(name: string, spec: RouteSpec): Json {
   }
   return {
     operationId: name, summary: spec.summary,
-    ...(spec.open ? { security: [] } : {}),
+    ...(spec.cron ? { security: [{ CronSecret: [] }] } : spec.open ? { security: [] } : {}),
     ...(parameters.length ? { parameters } : {}),
     ...(spec.body ? { requestBody: { required: true, content: { 'application/json': { schema: jsonSchema(spec.body, 'input') } } } } : {}),
     responses,
@@ -59,7 +59,10 @@ export function buildOpenApiDocument(): Json {
     security: [{ SystemCode: [] }],
     paths,
     components: {
-      securitySchemes: { SystemCode: { type: 'apiKey', in: 'header', name: 'X-System-Code', description: 'Code of the calling Client System.' } },
+      securitySchemes: {
+        CronSecret: { type: 'http', scheme: 'bearer', description: 'The CRON_SECRET, sent by Vercel Cron.' },
+        SystemCode: { type: 'apiKey', in: 'header', name: 'X-System-Code', description: 'Code of the calling Client System.' },
+      },
       parameters: { ActorId: { name: 'X-Actor-Id', in: 'header', required: false, description: 'Who acted, recorded in the audit history.', schema: { type: 'string' } } },
       schemas: { Error: jsonSchema(errorResponse, 'output') },
     },

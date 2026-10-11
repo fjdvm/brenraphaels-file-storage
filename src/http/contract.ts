@@ -1,6 +1,6 @@
 import type { z, ZodType } from 'zod';
 import {
-  editRequest, fileListResponse, fileResponse, healthResponse, linkInput, recordQuery,
+  cleanupResponse, editRequest, fileListResponse, fileResponse, healthResponse, linkInput, recordQuery,
   replacementRequest, uploadAddressResponse, uploadRequest, viewedFileResponse,
 } from '../files/schemas.ts';
 
@@ -18,6 +18,8 @@ export interface RouteSpec {
   errors: number[];
   /** Skips the Client System check. */
   open?: boolean;
+  /** Called by Vercel Cron with a bearer secret instead of a Client System code. */
+  cron?: boolean;
 }
 
 const notFound = 'File not found.';
@@ -33,6 +35,11 @@ export const routes = {
   openapi: {
     method: 'get', path: '/openapi.json', summary: 'This OpenAPI document',
     success: { status: 200, description: 'The OpenAPI document.' }, errors: [], open: true,
+  },
+  cleanup: {
+    method: 'get', path: '/cron/cleanup', summary: 'Remove expired Files and stale uploads (called daily by Vercel Cron)',
+    success: { status: 200, description: 'Everything due was removed.', schema: cleanupResponse },
+    errors: [401, 500], open: true, cron: true,
   },
   requestUpload: {
     method: 'post', path: '/files', summary: 'Request an upload address for a new File',
@@ -99,5 +106,5 @@ export const errorDescriptions: Record<number, string> = {
   413: 'The JSON body is larger than 16 kb.',
   409: 'The File is not in a state that allows this, for example nothing has been uploaded yet.',
   422: 'The uploaded object does not match what was declared; it was removed.',
-  500: 'Unexpected error.',
+  500: 'Unexpected error, or the cleanup could not remove some objects (the body then holds the counts).',
 };

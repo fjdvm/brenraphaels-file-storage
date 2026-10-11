@@ -99,7 +99,7 @@ export async function requestReplacement(deps: FileDeps, caller: Caller, id: str
   return db.transaction(async tx => {
     const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
     if (!isLive(row)) throw new HttpError(404, 'File not found');
-    const [updated] = await tx.update(files).set({ replacement: { contentType, size } }).where(eq(files.id, id)).returning();
+    const [updated] = await tx.update(files).set({ replacement: { contentType, size, requestedAt: new Date().toISOString() } }).where(eq(files.id, id)).returning();
     if (!updated) throw new Error('File disappeared while locked');
     const uploadUrl = await store.presignPut(bucketOf(row), stagingKeyOf(id), { contentType, expiresInSeconds: UPLOAD_ADDRESS_SECONDS });
     await writeAudit(tx, { action: 'file.replacement_requested', fileId: id, ...caller, detail: { contentType, size } });

@@ -9,5 +9,5 @@ export async function createTestApp(store = new FakeR2()) {
   if (!url) throw new Error('TEST_DATABASE_URL is required (a Neon branch connection string)');
   const pool = new Pool({ connectionString: url });
   await migrate(pool);
-  return { app: createApp({ pool, store, publicBaseUrl: 'https://cdn.test' }), pool, store };
+  return { app: createApp({ pool, store, publicBaseUrl: 'https://cdn.test', cronSecret: 'test-cron-secret' }), pool, store };
 }
