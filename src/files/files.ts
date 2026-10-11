@@ -60,13 +60,16 @@ export async function requestUpload({ db, store }: FileDeps, caller: Caller, inp
 export async function confirmUpload({ db, store }: FileDeps, caller: Caller, id: string) {
   const row = isUuid(id) ? (await db.select().from(files).where(eq(files.id, id)))[0] : undefined;
   if (!row) throw new HttpError(404, 'File not found');
+  if (row.expires_at && row.expires_at <= new Date()) throw new HttpError(404, 'File not found');
   if (row.status === 'active') return present(row);
 
   const found = await store.head(bucketOf(row), keyOf(row.id));
   if (!found) throw new HttpError(409, 'No uploaded object found; upload to the signed address first');
-  if (found.size !== row.size || found.contentType !== row.content_type) {
-    await store.delete(bucketOf(row), keyOf(row.id));
-    await db.delete(files).where(and(eq(files.id, row.id), eq(files.status, 'pending')));
+  const baseType = (type: string) => type.split(';')[0]?.trim().toLowerCase();
+  if (found.size !== row.size || baseType(found.contentType) !== baseType(row.content_type)) {
+    // Remove the row first, only while still Pending, so a concurrent confirm never leaves an Active File without its object.
+    const [removed] = await db.delete(files).where(and(eq(files.id, row.id), eq(files.status, 'pending'))).returning({ id: files.id });
+    if (removed) await store.delete(bucketOf(row), keyOf(row.id));
     await writeAudit(db, { action: 'file.rejected', fileId: row.id, ...caller, detail: { declared: { size: row.size, contentType: row.content_type }, found } });
     throw new HttpError(422, 'Uploaded object does not match the declared size or type; it was removed');
   }

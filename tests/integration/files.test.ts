@@ -114,6 +114,7 @@ test('a Temporary File stores its expiry and is not found once expired', async (
 
   await pool.query("UPDATE files SET expires_at = now() - interval '1 second' WHERE id = $1", [requested.body.id]);
   expect((await request(app).get(`/files/${requested.body.id}`).set(as('IMS'))).status).toBe(404);
+  expect((await request(app).post(`/files/${requested.body.id}/confirm`).set(as('IMS'))).status).toBe(404);
 });
 
 test('request, confirm and view each write an audit entry with system code and actor id', async () => {
