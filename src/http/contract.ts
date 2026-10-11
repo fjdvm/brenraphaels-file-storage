@@ -36,6 +36,10 @@ export const routes = {
     method: 'get', path: '/openapi.json', summary: 'This OpenAPI document',
     success: { status: 200, description: 'The OpenAPI document.' }, errors: [], open: true,
   },
+  docs: {
+    method: 'get', path: '/docs', summary: 'The usage guide (an HTML page)',
+    success: { status: 200, description: 'The guide page.' }, errors: [], open: true,
+  },
   cleanup: {
     method: 'get', path: '/cron/cleanup', summary: 'Remove expired Files and stale uploads (called daily by Vercel Cron)',
     success: { status: 200, description: 'Everything due was removed.', schema: cleanupResponse },

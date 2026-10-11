@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File Storage API Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#f8f8fb; --text:#2a2838; --muted:#6b6980; --faint:#9391a6; --line:#dddce6; --accent:#7a4fc4; --amber:#d9a21b;
+          --pill-bg:#ebe5f7; --pill-text:#5b3aa0; --term:#1b1428; --term-text:#e9c46a; --term-dim:#8f86a8;
+          --serif:'Newsreader',Georgia,'Times New Roman',serif; --sans:'Inter',system-ui,-apple-system,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.65 var(--sans); }
+  .page { max-width:1000px; margin:0 auto; padding:56px 24px 96px; }
+  .eyebrow { font:500 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:10px; }
+  .eyebrow::before { content:""; width:28px; border-top:1px solid var(--accent); }
+  h1 { font:600 44px/1.1 var(--serif); letter-spacing:-.01em; margin:14px 0 14px; color:#171523; }
+  .lede { max-width:560px; color:var(--muted); font-size:15px; margin:0 0 18px; }
+  .meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; font:11px var(--mono); color:var(--faint); }
+  .meta label { display:flex; align-items:center; gap:8px; }
+  .meta input { font:11px var(--mono); padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:#fff; color:var(--text); width:260px; max-width:100%; }
+  hr { border:0; border-top:1px solid var(--line); margin:36px 0 40px; }
+  .cols { display:grid; grid-template-columns:170px minmax(0,1fr); gap:56px; }
+  nav { position:sticky; top:32px; align-self:start; }
+  nav h2 { font:500 9px var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin:0 0 12px; }
+  nav ol { list-style:none; margin:0; padding:0; }
+  nav a { display:block; padding:5px 0 5px 10px; border-left:1px solid var(--line); color:var(--muted); text-decoration:none; font-size:11.5px; }
+  nav a:hover { color:var(--text); }
+  nav a.active { border-left-color:var(--amber); color:var(--text); font-weight:500; }
+  main { max-width:640px; }
+  section { margin:0 0 56px; scroll-margin-top:24px; }
+  section h2 { font:600 22px/1.2 var(--serif); margin:0 0 12px; color:#171523; display:flex; align-items:baseline; gap:8px; }
+  section h2 .n { font:500 10px var(--mono); color:var(--amber); }
+  section p { color:var(--muted); margin:0 0 12px; }
+  section strong { color:var(--text); }
+  h3 { font:600 12px var(--sans); color:var(--text); margin:20px 0 8px; }
+  .route { margin:0 0 12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .badge { font:500 10px var(--mono); letter-spacing:.04em; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); background:#fff; }
+  .b-system { color:var(--pill-text); border-color:#d6c9f0; background:var(--pill-bg); } .b-cron { color:#8a5a00; border-color:#ecd9a6; background:#fbf3dc; }
+  .b-open { color:#1b6b3a; border-color:#bfe3cc; background:#e4f4ea; }
+  code { font:11.5px var(--mono); background:var(--pill-bg); color:var(--pill-text); padding:1px 6px; border-radius:4px; }
+  .route code.path { font-size:12.5px; }
+  .method { font:600 11px var(--mono); color:var(--pill-text); }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; margin:0 0 6px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 14px 7px 0; border-bottom:1px solid var(--line); color:var(--muted); }
+  th { font:500 9px var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--faint); }
+  td:first-child { width:38%; } table.narrow td:first-child { width:1%; white-space:nowrap; }
+  td code { display:inline-block; margin:0 2px 3px 0; overflow-wrap:anywhere; } td { overflow-wrap:anywhere; }
+  .status { font:500 11px var(--mono); } .s2 { color:#1b6b3a; } .s4 { color:#9a6a00; } .s5 { color:#b3261e; }
+  .term { position:relative; background:var(--term); border-radius:8px; margin:6px 0 14px; }
+  .term pre { margin:0; padding:20px 22px; overflow:auto; font:11.5px/1.75 var(--mono); color:var(--term-text); }
+  .term pre code { background:none; color:inherit; padding:0; font:inherit; }
+  .term .c { color:var(--term-dim); }
+  button.copy { position:absolute; top:8px; right:8px; font:10px var(--mono); padding:3px 8px; border:1px solid #3a2f52; border-radius:4px; background:transparent; color:var(--term-dim); cursor:pointer; opacity:0; transition:opacity .15s; }
+  .term:hover button.copy, button.copy:focus-visible { opacity:1; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; gap:24px; } nav { position:static; } h1 { font-size:34px; } .page { padding-top:36px; } }
+</style></head>
+<body>
+<div class="page">
+  <div class="eyebrow">Documentation</div>
+  <h1>How to use the File Storage API</h1>
+  <p class="lede">The company's single place to keep uploaded files. This page covers every endpoint, the headers it needs and the errors it can answer with, plus one worked example each. It is written for the developers of POS, CRMS, IMS, HRMS and ECOM.</p>
+  <div class="meta"><span>One File, every Client System</span><span>·</span><span>System-code access</span><span>·</span>
+    <label>Base URL for examples <input type="text" id="base" placeholder="https://your-file-storage.example" autocomplete="off" aria-label="Base URL for examples"></label></div>
+  <hr>
+  <div class="cols">
+    <nav aria-label="Contents"><h2>Contents</h2><ol id="toc"></ol></nav>
+    <main id="content"></main>
+  </div>
+</div>
+<script>
+/* Mirrors docs/*.md and GET /openapi.json, the reference. Update them together. */
+const ROLES = { system:['X-System-Code','b-system'], open:['no header','b-open'], cron:['cron secret','b-cron'] };
+const H = '-H "X-System-Code: IMS" -H "X-Actor-Id: user-1"';
+const file = (extra = '') => `{ "id": "6f0c9a52-3d1e-4c8e-9a53-0f4b8b1d2c77", "status": "active", "filename": "cover.jpg",
+  "contentType": "image/jpeg", "size": 48213, "visibility": "public", "retentionType": "permanent",
+  "expiresAt": null, "variants": [ { "name": "small", "status": "ready", "url": "https://cdn.example/6f0c9a52-…/small.webp" }, … ]${extra} }`;
+const linkBody = '{"system":"IMS","entityType":"product","entityId":"42","role":"cover"}';
+const ID = '6f0c9a52-3d1e-4c8e-9a53-0f4b8b1d2c77';
+const SECTIONS = [
+{ id:'basics', title:'Start here', role:'open', intro:
+  `Every route except the four listed under <em>No header</em> needs <code>X-System-Code</code>: the code of the calling Client System (<code>POS</code>, <code>CRMS</code>, <code>IMS</code>, <code>HRMS</code> or <code>ECOM</code>). A missing or unknown code answers 401. <code>X-Actor-Id</code> is optional: the person or process that acted, recorded in the audit history. JSON in and out. Errors are <code>{"error": "…"}</code>, plus <code>details</code> (a list of <code>{path, message}</code>) for validation problems. Uploads are two steps: ask for an upload address, <code>PUT</code> the bytes to it, then confirm. Any Client System can view, edit, replace or delete any File.`,
+  tables:[{ title:'Public or Private', narrow:true, head:['Visibility','Who can view','The <code>url</code> you get back'], rows:[
+    ['<strong>Public</strong>','Anyone with the address','A permanent CDN address. Safe to put straight into a page or an <code>&lt;img&gt;</code>'],
+    ['<strong>Private</strong>','Only through a short-lived signed address','Signed and valid for five minutes, issued fresh on every view. Do not store it; ask again with <code>GET /files/:id</code>']]},
+  { title:'Rules to know', narrow:true, head:['Topic','Note'], rows:[
+    ['Visibility','Chosen when the File is created and never changed. Sending <code>visibility</code> to an edit or replacement answers 400'],
+    ['Retention type','<code>permanent</code> is kept until removed. <code>temporary</code> is removed automatically 7 days after upload unless promoted to permanent'],
+    ['Allowed types','PNG, JPEG, GIF, WebP, PDF, plain text, CSV, Word and Excel (<code>.doc</code> <code>.docx</code> <code>.xls</code> <code>.xlsx</code>). 25 MB at most'],
+    ['Variants','Confirming a JPEG, PNG or WebP makes small (150 px), medium (600 px) and large (1200 px) WebP copies, with the same Visibility. Other files have <code>"variants": []</code>'],
+    ['Bodies','JSON bodies are limited to 16 kb']]},
+  { title:'Errors on every route that needs X-System-Code', narrow:true, head:['Status','When','Body'], rows:[
+    ['<span class="status s4">400</span>','Malformed JSON or a field that fails validation','<code>{"error":"…","details":[…]}</code>'],
+    ['<span class="status s4">401</span>','No <code>X-System-Code</code>, or an unknown one','<code>{"error":"X-System-Code header is required"}</code> or <code>"Unknown system code"</code>'],
+    ['<span class="status s4">404</span>','Unknown, malformed, deleted, expired or still-pending File id','<code>{"error":"File not found"}</code>'],
+    ['<span class="status s4">413</span>','JSON body over 16 kb','<code>{"error":"…"}</code>'],
+    ['<span class="status s5">500</span>','Unexpected failure','<code>{"error":"…"}</code>']]}] },
+{ id:'post-files', title:'Request an upload address', method:'POST', path:'/files', role:'system', intro:'Creates a Pending upload and returns a signed <code>uploadUrl</code> valid for 15 minutes. <code>PUT</code> the bytes there with the same <code>Content-Type</code> you declared, then confirm. An optional <code>link</code> is saved now and appears in record lookups once the upload is confirmed.',
+  tables:[{ title:'Body', head:['Field','Required','Notes'], rows:[
+    ['<code>filename</code>','yes','Nonempty string'],
+    ['<code>contentType</code>','yes','One of the allowed types'],
+    ['<code>size</code>','yes','Bytes, a positive integer of at most 25 MB'],
+    ['<code>visibility</code>','yes','<code>public</code> or <code>private</code>. Fixed from now on'],
+    ['<code>retentionType</code>','yes','<code>permanent</code> or <code>temporary</code>'],
+    ['<code>link</code>','no','<code>{system, entityType, entityId, role}</code>, see Add a Link']]}],
+  responses:[['201','The File (<code>status: "pending"</code>) plus <code>uploadUrl</code> and <code>uploadUrlExpiresInSeconds</code>'],['400','Invalid body, for example a disallowed type or a size over 25 MB'],['401','Missing or unknown system code']],
+  example:`curl -X POST "$BASE_URL/files" ${H} -H "Content-Type: application/json" \\
+  -d '{"filename":"cover.jpg","contentType":"image/jpeg","size":48213,
+       "visibility":"public","retentionType":"permanent","link":${linkBody}}'
+# 201 {"id":"${ID}","status":"pending","uploadUrl":"https://…r2.cloudflarestorage.com/…","uploadUrlExpiresInSeconds":900, …}
+
+# Then send the bytes to the uploadUrl you were given (not to this service)
+curl -X PUT "$UPLOAD_URL" -H "Content-Type: image/jpeg" --data-binary @cover.jpg` },
+{ id:'post-files-id-confirm', title:'Confirm an upload', method:'POST', path:'/files/:id/confirm', role:'system', intro:'Checks the uploaded object against what was declared and makes the File Active. Pictures get their Variants before the reply. Confirming again returns the saved File.',
+  responses:[['200','The Active File, with <code>variants</code>'],['404','Unknown File id'],['409','Nothing has been uploaded yet'],['422','The object does not match the declared size or type. It is removed']],
+  example:`curl -X POST "$BASE_URL/files/${ID}/confirm" ${H}
+# 200
+${file()}` },
+{ id:'get-files-id', title:'View a File', method:'GET', path:'/files/:id', role:'system', intro:'Returns an Active File with a <code>url</code> to show it from. A Public File gets its CDN address; a Private File gets a signed address valid for five minutes, so ask again whenever you need to show it. Variant addresses follow the same rule.',
+  responses:[['200','The File plus <code>url</code>'],['404','Unknown, pending, deleted or expired']],
+  example:`curl "$BASE_URL/files/${ID}" ${H}
+# 200
+${file(',\n  "url": "https://cdn.example/6f0c9a52-…"')}` },
+{ id:'patch-files-id', title:'Edit a File', method:'PATCH', path:'/files/:id', role:'system', intro:'Send <code>filename</code>, <code>retentionType</code> or both. Promoting a Temporary File to permanent clears its expiry; demoting a permanent File to temporary sets expiry 7 days from now. <code>visibility</code> or any other field answers 400.',
+  tables:[{ title:'Body', head:['Field','Required','Notes'], rows:[
+    ['<code>filename</code>','one of the two','Nonempty string, trimmed'],
+    ['<code>retentionType</code>','one of the two','<code>permanent</code> or <code>temporary</code>']]}],
+  responses:[['200','The edited File'],['400','Empty edit, unsupported field (<code>Visibility cannot be changed after a File is created</code>) or invalid value'],['404','Unknown, pending or expired']],
+  example:`curl -X PATCH "$BASE_URL/files/${ID}" ${H} -H "Content-Type: application/json" \\
+  -d '{"filename":"cover.png","retentionType":"temporary"}'
+# 200
+${file()}` },
+{ id:'post-files-id-replacement', title:'Request a replacement upload', method:'POST', path:'/files/:id/replacement', role:'system', intro:'Replaces an Active File’s bytes without changing its id or address. Declare the new <code>contentType</code> and <code>size</code>, then <code>PUT</code> the bytes to the returned <code>uploadUrl</code>. They go to a staging object; the live File is untouched until you confirm. Asking again replaces the earlier request.',
+  tables:[{ title:'Body', head:['Field','Required','Notes'], rows:[
+    ['<code>contentType</code>','yes','One of the allowed types'],
+    ['<code>size</code>','yes','Bytes, at most 25 MB']]}],
+  responses:[['201','The File plus <code>uploadUrl</code>'],['400','Invalid body, or <code>visibility</code> supplied'],['404','Unknown, pending or expired']],
+  example:`curl -X POST "$BASE_URL/files/${ID}/replacement" ${H} -H "Content-Type: application/json" \\
+  -d '{"contentType":"image/png","size":1234}'
+# 201 {"id":"${ID}", …, "uploadUrl":"https://…r2.cloudflarestorage.com/…","uploadUrlExpiresInSeconds":900}
+
+curl -X PUT "$UPLOAD_URL" -H "Content-Type: image/png" --data-binary @cover.png` },
+{ id:'post-files-id-replacement-confirm', title:'Confirm a replacement', method:'POST', path:'/files/:id/replacement/confirm', role:'system', intro:'Checks the staged object against the declaration, swaps it over the original and regenerates Variants. Public pictures can take about 5 minutes to change in browser and CDN caches.',
+  responses:[['200','The File with its new contents'],['404','Unknown, pending or expired'],['409','Nothing requested or uploaded'],['422','Does not match the declaration. The staged object is discarded and the live File is untouched']],
+  example:`curl -X POST "$BASE_URL/files/${ID}/replacement/confirm" ${H}
+# 200
+${file()}` },
+{ id:'delete-files-id', title:'Delete a File', method:'DELETE', path:'/files/:id', role:'system', intro:'Removes the File for everyone: its objects, Variants and Links. <strong>You</strong> are responsible for checking that no other Client System still uses it. Deleting a File that is already deleted also answers 204. Copies already cached by a browser or the CDN are not recalled.',
+  responses:[['204','Deleted, no body'],['404','Unknown or malformed id'],['500','Storage failed; retry the same request']],
+  example:`curl -X DELETE "$BASE_URL/files/${ID}" ${H}
+# 204` },
+{ id:'get-files', title:'Find a record’s Files', method:'GET', path:'/files', role:'system', intro:'Lists the Active Files carrying a Link to one record, ordered by id, 50 per page. Each File appears once even if several Links match. Use <code>GET /files/:id</code> for an original viewing address.',
+  tables:[{ title:'Query parameters', head:['Parameter','Required','Meaning'], rows:[
+    ['<code>system</code> <code>entityType</code> <code>entityId</code>','yes','The record, as it was linked'],
+    ['<code>role</code>','no','Only Files linked with this role, for example <code>cover</code>'],
+    ['<code>page</code>','no','The <code>nextPage</code> of the previous result']]}],
+  responses:[['200','<code>{"files":[…],"nextPage":"…"|null}</code>'],['400','A required parameter is missing, or <code>page</code> is not a File id']],
+  example:`curl -G "$BASE_URL/files" ${H} \\
+  --data-urlencode "system=IMS" --data-urlencode "entityType=product" \\
+  --data-urlencode "entityId=42" --data-urlencode "role=cover"
+# 200 {"files":[{…}],"nextPage":null}` },
+{ id:'post-files-id-links', title:'Add a Link', method:'POST', path:'/files/:id/links', role:'system', intro:'A Link labels a File with the record it belongs to. It only helps you find Files: it does not control who can view them. Adding a Link that exists is harmless.',
+  tables:[{ title:'Body', head:['Field','Required','Notes'], rows:[
+    ['<code>system</code>','yes','Code of a known Client System'],
+    ['<code>entityType</code> <code>entityId</code>','yes','The record, for example <code>product</code> and <code>42</code>'],
+    ['<code>role</code>','yes','For example <code>cover</code>']]}],
+  responses:[['204','The Link exists, no body'],['400','Invalid Link'],['404','Unknown, pending or expired File']],
+  example:`curl -X POST "$BASE_URL/files/${ID}/links" ${H} -H "Content-Type: application/json" \\
+  -d '${linkBody}'
+# 204` },
+{ id:'delete-files-id-links', title:'Remove a Link', method:'DELETE', path:'/files/:id/links', role:'system', intro:'Send the same Link object as the body. The File and its other Links stay. Removing a Link that does not exist is harmless.',
+  responses:[['204','The Link is gone, no body'],['400','Invalid Link'],['404','Unknown, pending or expired File']],
+  example:`curl -X DELETE "$BASE_URL/files/${ID}/links" ${H} -H "Content-Type: application/json" \\
+  -d '${linkBody}'
+# 204` },
+{ id:'get-health', title:'Health check', method:'GET', path:'/health', role:'open', intro:'Answers when the service is running. No header needed.',
+  responses:[['200','<code>{"status":"ok"}</code>']],
+  example:`curl "$BASE_URL/health"
+# 200 {"status":"ok"}` },
+{ id:'get-openapi.json', title:'OpenAPI document', method:'GET', path:'/openapi.json', role:'open', intro:'The machine-readable description of every endpoint, generated from the same schemas the routes validate with. Use it to generate a client. No header needed.',
+  responses:[['200','An OpenAPI 3.1 document']],
+  example:`curl "$BASE_URL/openapi.json"
+# 200 {"openapi":"3.1.0","info":{"title":"File storage", …}, "paths":{…}}` },
+{ id:'get-docs', title:'This guide', method:'GET', path:'/docs', role:'open', intro:'The page you are reading. No header needed.',
+  responses:[['200','This HTML page']],
+  example:`curl "$BASE_URL/docs"` },
+{ id:'get-cron-cleanup', title:'Daily cleanup', method:'GET', path:'/cron/cleanup', role:'cron', intro:'Not for Client Systems. Vercel Cron calls it daily at 03:00 UTC with <code>Authorization: Bearer $CRON_SECRET</code>. It removes expired Temporary Files, discards uploads never confirmed after 24 hours and abandoned replacement uploads. Any other caller gets 401 and nothing changes.',
+  responses:[['200','<code>{"expiredDeleted":0,"pendingDiscarded":0,"replacementsDiscarded":0,"failures":0}</code>'],['401','Wrong or missing secret'],['500','Some objects could not be removed (the body holds the counts); the next run retries']],
+  example:`curl "$BASE_URL/cron/cleanup" -H "Authorization: Bearer $CRON_SECRET"
+# 200 {"expiredDeleted":3,"pendingDiscarded":1,"replacementsDiscarded":0,"failures":0}` }
+];
+
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const table = t => `${t.title ? `<h3>${t.title}</h3>` : ''}<table${t.narrow ? ' class="narrow"' : ''}><thead><tr>${t.head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${t.rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+const statusClass = s => 's' + s[0];
+// Dim comment lines (the sample responses) in the terminal blocks.
+const termHtml = text => esc(text).split('\n').map(l => /^#/.test(l) ? `<span class="c">${l}</span>` : l).join('\n');
+function render(base) {
+  $('#content').innerHTML = SECTIONS.map((s, i) => {
+    const [roleText, roleClass] = ROLES[s.role];
+    const route = `<div class="route">${s.method ? `<span class="method">${s.method}</span><code class="path">${s.path}</code>` : ''}<span class="badge ${roleClass}">${roleText}</span></div>`;
+    const resp = s.responses ? table({ title:'Responses', narrow:true, head:['Status','Body'], rows:s.responses.map(([c,b])=>[`<span class="status ${statusClass(c)}">${c}</span>`, b]) }) : '';
+    const ex = s.example ? `<h3>Worked example</h3><div class="term"><button class="copy" type="button">Copy</button><pre><code>${termHtml(s.example.replaceAll('$BASE_URL', base || '$BASE_URL'))}</code></pre></div>` : '';
+    return `<section id="${s.id}"><h2><span class="n">${String(i + 1).padStart(2, '0')}</span>${s.title}</h2>${route}
+      <p>${s.intro}</p>${(s.tables||[]).map(table).join('')}${resp}${ex}</section>`;
+  }).join('');
+}
+$('#toc').innerHTML = SECTIONS.map((s, i) => `<li><a href="#${s.id}">${i + 1}. ${s.title}</a></li>`).join('');
+let base = location.origin.startsWith('http') ? location.origin : '';
+try { base = localStorage.getItem('file-storage-base') ?? base; } catch {}
+$('#base').value = base;
+render(base);
+$('#base').addEventListener('input', e => { base = e.target.value.trim().replace(/\/$/,''); try { localStorage.setItem('file-storage-base', base); } catch {} render(base); observe(); });
+$('#content').addEventListener('click', e => {
+  if (!e.target.matches('button.copy')) return;
+  const btn = e.target;
+  navigator.clipboard?.writeText($('code', btn.parentElement).textContent).then(() => { btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy', 1200); });
+});
+let observer;
+function observe() {
+  observer?.disconnect();
+  observer = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) {
+      document.querySelectorAll('#toc a').forEach(a => a.classList.toggle('active', a.hash === '#' + entry.target.id));
+    }
+  }, { rootMargin: '0px 0px -70% 0px' });
+  document.querySelectorAll('section').forEach(el => observer.observe(el));
+}
+observe();
+</script>
+</body>
+</html>
