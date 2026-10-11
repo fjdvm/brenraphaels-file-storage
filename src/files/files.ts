@@ -80,7 +80,7 @@ export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) 
   const result = await db.transaction(async tx => {
     // Hold the File lock through generation so another confirm returns the saved result without writing Variants again.
     const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
-    if (!row) return new HttpError(404, 'File not found');
+    if (!row || row.status === 'deleted') return new HttpError(404, 'File not found');
     if (row.expires_at && row.expires_at <= new Date()) return new HttpError(404, 'File not found');
     if (row.status === 'active') return row;
 
@@ -195,6 +195,21 @@ export async function editFile(deps: FileDeps, caller: Caller, id: string, input
     return updated;
   });
   return present(edited, deps);
+}
+
+export async function deleteFile(deps: FileDeps, caller: Caller, id: string) {
+  if (!isUuid(id)) throw new HttpError(404, 'File not found');
+  await deps.db.transaction(async tx => {
+    // Serialize deletion with confirmation, edits and Link changes.
+    const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
+    if (!row) throw new HttpError(404, 'File not found');
+    if (row.status === 'deleted') return;
+    // Remove every object before committing Deleted, so a storage failure can be retried.
+    await deps.store.deletePrefix(bucketOf(row), `${row.id}/`);
+    await tx.delete(fileLinks).where(eq(fileLinks.file_id, id));
+    await tx.update(files).set({ status: 'deleted' }).where(eq(files.id, id));
+    await writeAudit(tx, { action: 'file.deleted', fileId: id, ...caller });
+  });
 }
 
 export async function viewFile(deps: FileDeps, caller: Caller, id: string) {

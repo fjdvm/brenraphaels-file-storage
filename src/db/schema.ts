@@ -12,7 +12,7 @@ export const files = pgTable('files', {
   size: bigint({ mode: 'number' }).notNull(),
   visibility: text().$type<'public' | 'private'>().notNull(),
   retention_type: text().$type<'permanent' | 'temporary'>().notNull(),
-  status: text().$type<'pending' | 'active'>().notNull().default('pending'),
+  status: text().$type<'pending' | 'active' | 'deleted'>().notNull().default('pending'),
   created_by_system: text().notNull(),
   created_at: timestamp({ withTimezone: true }).defaultNow().notNull(),
   confirmed_at: timestamp({ withTimezone: true }),
