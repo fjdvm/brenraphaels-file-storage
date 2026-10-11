@@ -31,7 +31,7 @@ test('other routes refuse an unknown system code', async () => {
 });
 
 test.each(['POS', 'CRMS', 'IMS', 'HRMS', 'ECOM'])('accepts %s and reaches the route lookup', async code => {
-  const response = await request(app).get('/files/anything').set('X-System-Code', code);
+  const response = await request(app).get('/nowhere').set('X-System-Code', code);
   expect(response.status).toBe(404);
   expect(response.body).toEqual({ error: 'Not found' });
 });

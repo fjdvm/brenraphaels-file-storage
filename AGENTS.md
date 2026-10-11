@@ -17,3 +17,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 ### Pull requests
 
 When work is done, always open a pull request (`gh pr create`, using the `/pr` skill for the body). Never leave finished work only committed locally or on `main`.
+
+### Closing issues
+
+Every pull request closes the issue it implements. Put `Closes #<number>` in the PR body so GitHub closes the issue automatically when the PR merges. GitHub only does this for PRs into the default branch (`main`); for a PR into any other branch, close the issue yourself with `gh issue close <number>` once the work reaches `main`.

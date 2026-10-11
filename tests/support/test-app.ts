@@ -10,5 +10,5 @@ export async function createTestApp() {
   const pool = new Pool({ connectionString: url });
   await migrate(pool);
   const store = new FakeR2();
-  return { app: createApp({ pool, store }), pool, store };
+  return { app: createApp({ pool, store, publicBaseUrl: 'https://cdn.test' }), pool, store };
 }
