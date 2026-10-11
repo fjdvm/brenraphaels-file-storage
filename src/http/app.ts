@@ -8,16 +8,14 @@ import { authenticate } from './middleware/authenticate.ts';
 
 export interface AppDeps { pool: Pool; store?: ObjectStore }
 
-export function createApp({ pool, store }: AppDeps) {
+export function createApp({ pool }: AppDeps) {
   const db = drizzle(pool);
   const app = express();
-  app.set('store', store);
-  app.use(express.json({ limit: '16kb' }));
   app.get('/health', (_req, res) => { res.json({ status: 'ok' }); });
 
   // Everything below the health route needs a known Client System.
   const api = express.Router();
-  api.use(requireSystemCode(db), authenticate);
+  api.use(requireSystemCode(db), authenticate, express.json({ limit: '16kb' }));
   app.use(api);
 
   app.use(notFound, errorHandler);

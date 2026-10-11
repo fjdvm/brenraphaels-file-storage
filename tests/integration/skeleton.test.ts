@@ -36,8 +36,13 @@ test.each(['POS', 'CRMS', 'IMS', 'HRMS', 'ECOM'])('accepts %s and reaches the ro
   expect(response.body).toEqual({ error: 'Not found' });
 });
 
+test('refuses a missing system code before reading the body', async () => {
+  const response = await request(app).post('/files').set('Content-Type', 'application/json').send('{oops');
+  expect(response.status).toBe(401);
+});
+
 test('malformed JSON uses the short error shape', async () => {
-  const response = await request(app).post('/health').set('X-System-Code', 'POS').set('Content-Type', 'application/json').send('{oops');
+  const response = await request(app).post('/files').set('X-System-Code', 'POS').set('Content-Type', 'application/json').send('{oops');
   expect(response.status).toBe(400);
   expect(response.body).toEqual({ error: 'Invalid request' });
 });
