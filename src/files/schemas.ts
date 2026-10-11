@@ -74,6 +74,13 @@ export const recordQuery = z.object({
     .describe('The nextPage value of the previous result.'),
 });
 
+export const mcpRequest = z.object({
+  jsonrpc: z.literal('2.0'),
+  method: z.string().describe('For example tools/list or tools/call.'),
+  params: z.record(z.string(), z.unknown()).optional(),
+  id: z.union([z.string(), z.number()]).optional(),
+}).describe('A JSON-RPC 2.0 message.');
+
 export const fileId = z.string().meta({ format: 'uuid' }).describe('File id.');
 
 // ── Responses ─────────────────────────────────────────────────────────────

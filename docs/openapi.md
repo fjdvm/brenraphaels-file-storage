@@ -27,3 +27,13 @@ as UUIDs but not validated by the schemas.
 section per endpoint, each with a worked example. It needs no `X-System-Code`. Its examples use
 `$BASE_URL`, which the box at the top of the page rewrites. The page is written by hand, so update
 it when a route changes; `tests/integration/docs.test.ts` fails if a route in `contract.ts` is missing from it.
+
+## MCP endpoint
+
+`POST /mcp` is a stateless remote MCP server (`src/mcp/`). It sits behind the same `X-System-Code`
+check, so the system code and optional `X-Actor-Id` of the client's configured headers are the
+caller of every tool. Each tool in `src/mcp/tools.ts` validates with the same Zod schema as its
+route and calls the same function in `src/files/files.ts`; failures come back as tool errors with
+the API's message. `request_upload` and `replace_file` add an `uploadCommand` (a `curl` PUT) so the
+bytes never pass through the model. Add a tool there when a route should be reachable from agents,
+and keep the "Use it from an agent" section of the guide in step.
