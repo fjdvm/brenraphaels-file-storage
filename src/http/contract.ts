@@ -1,6 +1,6 @@
 import type { z, ZodType } from 'zod';
 import {
-  cleanupResponse, editRequest, fileListResponse, fileResponse, healthResponse, linkInput, recordQuery,
+  cleanupResponse, editRequest, mcpRequest, fileListResponse, fileResponse, healthResponse, linkInput, recordQuery,
   replacementRequest, uploadAddressResponse, uploadRequest, viewedFileResponse,
 } from '../files/schemas.ts';
 
@@ -44,6 +44,12 @@ export const routes = {
     method: 'get', path: '/cron/cleanup', summary: 'Remove expired Files and stale uploads (called daily by Vercel Cron)',
     success: { status: 200, description: 'Everything due was removed.', schema: cleanupResponse },
     errors: [401, 500], open: true, cron: true,
+  },
+  mcp: {
+    method: 'post', path: '/mcp', summary: 'MCP endpoint (JSON-RPC) whose tools mirror the Files routes',
+    body: mcpRequest,
+    success: { status: 200, description: 'The JSON-RPC response. Tool failures are results with isError set.' },
+    errors: [400, 401],
   },
   requestUpload: {
     method: 'post', path: '/files', summary: 'Request an upload address for a new File',

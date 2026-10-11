@@ -45,3 +45,11 @@ test('every example is written against $BASE_URL so the base-URL box can rewrite
 test('keeps the Files routes behind a system code', async () => {
   expect((await request(app).get('/files')).status).toBe(401);
 });
+
+test('shows the install snippet for all four agent clients', async () => {
+  const html = await guide();
+  expect(html).toContain('Use it from an agent');
+  for (const snippet of ['claude mcp add --transport http file-storage', '[mcp_servers.file-storage]', '.cursor/mcp.json', '.kiro/settings/mcp.json']) {
+    expect(html).toContain(snippet);
+  }
+});

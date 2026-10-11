@@ -9,6 +9,7 @@ import { filesRouter } from './files-router.ts';
 import { authenticate } from './middleware/authenticate.ts';
 import { routes } from './contract.ts';
 import { buildOpenApiDocument } from './openapi.ts';
+import { mcpRouter } from '../mcp/mcp-router.ts';
 import { guide } from './docs.ts';
 
 export interface AppDeps { pool: Pool; store: ObjectStore; publicBaseUrl: string; cronSecret: string }
@@ -28,6 +29,7 @@ export function createApp({ pool, store, publicBaseUrl, cronSecret }: AppDeps) {
   const api = express.Router();
   api.use(requireSystemCode(db), authenticate, express.json({ limit: '16kb' }));
   api.use(filesRouter({ db, store, publicBaseUrl }));
+  api.use(mcpRouter({ db, store, publicBaseUrl }));
   app.use(api);
 
   app.use(notFound, errorHandler);

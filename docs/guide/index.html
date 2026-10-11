@@ -175,6 +175,33 @@ ${file()}` },
   example:`curl -X DELETE "$BASE_URL/files/${ID}/links" ${H} -H "Content-Type: application/json" \\
   -d '${linkBody}'
 # 204` },
+{ id:'post-mcp', title:'Use it from an agent', method:'POST', path:'/mcp', role:'system', intro:'A remote MCP server, so an AI agent can manage Files with tools instead of hand-written requests. Point the client at <code>/mcp</code> and configure the same headers as the API: <code>X-System-Code</code> is required (a missing or unknown code answers 401) and <code>X-Actor-Id</code> is optional and lands in the audit history. Every tool does what the matching route does and fails with the same message, returned as a tool error. The model never carries file bytes: <code>request_upload</code> and <code>replace_file</code> return the signed address and a ready-to-run <code>uploadCommand</code> (a <code>curl</code> PUT) for the agent to run in a shell. Pass <code>localPath</code> so the command names the real file.',
+  tables:[{ title:'Tools', narrow:true, head:['Tool','Same as','Notes'], rows:[
+    ['<code>request_upload</code>','<code>POST /files</code>','Returns <code>uploadUrl</code> and <code>uploadCommand</code>. Run the command, then confirm'],
+    ['<code>confirm_upload</code>','<code>POST /files/:id/confirm</code>',''],
+    ['<code>view_file</code>','<code>GET /files/:id</code>',''],
+    ['<code>list_files</code>','<code>GET /files</code>','Takes <code>system</code>, <code>entityType</code>, <code>entityId</code>, optional <code>role</code> and <code>page</code>'],
+    ['<code>edit_file</code>','<code>PATCH /files/:id</code>',''],
+    ['<code>replace_file</code>','<code>POST /files/:id/replacement</code>','Returns <code>uploadCommand</code> too'],
+    ['<code>confirm_replacement</code>','<code>POST /files/:id/replacement/confirm</code>',''],
+    ['<code>delete_file</code>','<code>DELETE /files/:id</code>','']]}],
+  responses:[['200','A JSON-RPC reply. A failed tool call is a result with <code>isError: true</code> and the API’s message'],['400','Not a valid JSON-RPC request'],['401','Missing or unknown system code']],
+  example:`# Claude Code
+claude mcp add --transport http file-storage $BASE_URL/mcp \\
+  --header "X-System-Code: IMS" --header "X-Actor-Id: your-name"
+
+# Codex: add to ~/.codex/config.toml
+[mcp_servers.file-storage]
+url = "$BASE_URL/mcp"
+http_headers = { "X-System-Code" = "IMS", "X-Actor-Id" = "your-name" }
+
+# Cursor: add to ~/.cursor/mcp.json (or .cursor/mcp.json in a project)
+{ "mcpServers": { "file-storage": { "url": "$BASE_URL/mcp",
+    "headers": { "X-System-Code": "IMS", "X-Actor-Id": "your-name" } } } }
+
+# Kiro: add to .kiro/settings/mcp.json (or ~/.kiro/settings/mcp.json)
+{ "mcpServers": { "file-storage": { "url": "$BASE_URL/mcp",
+    "headers": { "X-System-Code": "IMS", "X-Actor-Id": "your-name" } } } }` },
 { id:'get-health', title:'Health check', method:'GET', path:'/health', role:'open', intro:'Answers when the service is running. No header needed.',
   responses:[['200','<code>{"status":"ok"}</code>']],
   example:`curl "$BASE_URL/health"
