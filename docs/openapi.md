@@ -20,3 +20,10 @@ its schemas to validate. `tests/integration/openapi.test.ts` fails when the app 
 route that is missing from the document (or the document lists one the app does not serve).
 Path ids are checked by the service (a malformed id answers `404`), so they are documented
 as UUIDs but not validated by the schemas.
+
+## Usage guide
+
+`GET /docs` serves a self-contained HTML guide (`docs/guide/index.html`) with Start here and one
+section per endpoint, each with a worked example. It needs no `X-System-Code`. Its examples use
+`$BASE_URL`, which the box at the top of the page rewrites. The page is written by hand, so update
+it when a route changes; `tests/integration/docs.test.ts` fails if a route in `contract.ts` is missing from it.

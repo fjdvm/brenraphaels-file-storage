@@ -9,6 +9,7 @@ import { filesRouter } from './files-router.ts';
 import { authenticate } from './middleware/authenticate.ts';
 import { routes } from './contract.ts';
 import { buildOpenApiDocument } from './openapi.ts';
+import { guide } from './docs.ts';
 
 export interface AppDeps { pool: Pool; store: ObjectStore; publicBaseUrl: string; cronSecret: string }
 
@@ -18,6 +19,8 @@ export function createApp({ pool, store, publicBaseUrl, cronSecret }: AppDeps) {
   const openApiDocument = buildOpenApiDocument();
   app.get(routes.health.path, (_req, res) => { res.json({ status: 'ok' }); });
   app.get(routes.openapi.path, (_req, res) => { res.json(openApiDocument); });
+
+  app.get(routes.docs.path, (_req, res) => { res.type('html').send(guide()); });
 
   app.use(cronRouter({ db, store, cronSecret }));
 
