@@ -70,34 +70,36 @@ export async function requestUpload(deps: FileDeps, caller: Caller, input: unkno
 
 export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) {
   const { db, store } = deps;
-  const row = isUuid(id) ? (await db.select().from(files).where(eq(files.id, id)))[0] : undefined;
-  if (!row) throw new HttpError(404, 'File not found');
-  if (row.expires_at && row.expires_at <= new Date()) throw new HttpError(404, 'File not found');
-  if (row.status === 'active') return present(row, deps);
+  if (!isUuid(id)) throw new HttpError(404, 'File not found');
+  const result = await db.transaction(async tx => {
+    // Hold the File lock through generation so another confirm returns the saved result without writing Variants again.
+    const [row] = await tx.select().from(files).where(eq(files.id, id)).for('update');
+    if (!row) return new HttpError(404, 'File not found');
+    if (row.expires_at && row.expires_at <= new Date()) return new HttpError(404, 'File not found');
+    if (row.status === 'active') return row;
 
-  const found = await store.head(bucketOf(row), keyOf(row.id));
-  if (!found) throw new HttpError(409, 'No uploaded object found; upload to the signed address first');
-  const baseType = (type: string) => type.split(';')[0]?.trim().toLowerCase();
-  if (found.size !== row.size || baseType(found.contentType) !== baseType(row.content_type)) {
-    // Remove the row first, only while still Pending, so a concurrent confirm never leaves an Active File without its object.
-    const [removed] = await db.delete(files).where(and(eq(files.id, row.id), eq(files.status, 'pending'))).returning({ id: files.id });
-    if (removed) await store.delete(bucketOf(row), keyOf(row.id));
-    await writeAudit(db, { action: 'file.rejected', fileId: row.id, ...caller, detail: { declared: { size: row.size, contentType: row.content_type }, found } });
-    throw new HttpError(422, 'Uploaded object does not match the declared size or type; it was removed');
-  }
+    const found = await store.head(bucketOf(row), keyOf(row.id));
+    if (!found) return new HttpError(409, 'No uploaded object found; upload to the signed address first');
+    const baseType = (type: string) => type.split(';')[0]?.trim().toLowerCase();
+    if (found.size !== row.size || baseType(found.contentType) !== baseType(row.content_type)) {
+      await tx.delete(files).where(eq(files.id, row.id));
+      await store.delete(bucketOf(row), keyOf(row.id));
+      await writeAudit(tx, { action: 'file.rejected', fileId: row.id, ...caller, detail: { declared: { size: row.size, contentType: row.content_type }, found } });
+      // Return the rejection so removal commits before the HTTP error is thrown.
+      return new HttpError(422, 'Uploaded object does not match the declared size or type; it was removed');
+    }
 
-  const variants = await createVariants(store, bucketOf(row), row.id, row.content_type);
-  const now = new Date();
-  const expiresAt = row.retention_type === 'temporary' ? new Date(now.getTime() + TEMPORARY_DAYS * 86_400_000) : null;
-  const [active] = await db.update(files).set({ status: 'active', confirmed_at: now, expires_at: expiresAt, variants })
-    .where(and(eq(files.id, row.id), eq(files.status, 'pending'))).returning();
-  if (!active) { // lost a race with another confirm
-    const [current] = await db.select().from(files).where(eq(files.id, row.id));
-    if (!current) throw new HttpError(404, 'File not found');
-    return present(current, deps);
-  }
-  await writeAudit(db, { action: 'file.confirmed', fileId: row.id, ...caller });
-  return present(active, deps);
+    const variants = await createVariants(store, bucketOf(row), row.id, row.content_type);
+    const now = new Date();
+    const expiresAt = row.retention_type === 'temporary' ? new Date(now.getTime() + TEMPORARY_DAYS * 86_400_000) : null;
+    const [active] = await tx.update(files).set({ status: 'active', confirmed_at: now, expires_at: expiresAt, variants })
+      .where(eq(files.id, row.id)).returning();
+    if (!active) throw new Error('Confirmed File disappeared while locked');
+    await writeAudit(tx, { action: 'file.confirmed', fileId: row.id, ...caller });
+    return active;
+  });
+  if (result instanceof HttpError) throw result;
+  return present(result, deps);
 }
 
 export async function viewFile(deps: FileDeps, caller: Caller, id: string) {

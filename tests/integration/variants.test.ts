@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import request from 'supertest';
 import sharp from 'sharp';
 import { createTestApp } from '../support/test-app.ts';
@@ -22,7 +22,7 @@ const store = new UnreliableR2();
 let context: Awaited<ReturnType<typeof createTestApp>>;
 beforeAll(async () => { context = await createTestApp(store); });
 afterAll(async () => { await context?.pool.end(); });
-beforeEach(async () => { await context.pool.query('DELETE FROM files'); store.objects.clear(); store.failMedium = false; store.failRead = false; });
+beforeEach(async () => { vi.restoreAllMocks(); await context.pool.query('DELETE FROM files'); store.objects.clear(); store.failMedium = false; store.failRead = false; });
 
 const headers = { 'X-System-Code': 'IMS' };
 async function upload(body: Uint8Array, contentType = 'image/png', visibility = 'public') {
@@ -35,6 +35,46 @@ async function upload(body: Uint8Array, contentType = 'image/png', visibility = 
 }
 const confirm = (id: string) => request(context.app).post(`/files/${id}/confirm`).set(headers);
 const view = (id: string) => request(context.app).get(`/files/${id}`).set({ 'X-System-Code': 'POS' });
+
+function signal() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+test('concurrent confirmations preserve failed Variant statuses and objects consistently', async () => {
+  const bytes = await sharp({ create: { width: 1600, height: 800, channels: 3, background: 'red' } }).png().toBuffer();
+  const id = await upload(bytes);
+  const firstRead = signal();
+  const secondRead = signal();
+  const releaseFirst = signal();
+  const releaseSecond = signal();
+  const get = store.get.bind(store);
+  let reads = 0;
+  vi.spyOn(store, 'get').mockImplementation(async (bucket, key) => {
+    if (key.endsWith('/original')) {
+      if (++reads === 1) { firstRead.resolve(); await releaseFirst.promise; }
+      else { secondRead.resolve(); await releaseSecond.promise; }
+    }
+    return get(bucket, key);
+  });
+  store.failMedium = true;
+  const first = confirm(id).then(response => response);
+  await firstRead.promise;
+  const second = confirm(id).then(response => response);
+  // Allow the second HTTP request to reach either the original read or the File lock.
+  await Promise.race([secondRead.promise, new Promise(resolve => setTimeout(resolve, 100))]);
+  releaseFirst.resolve();
+  const winner = await first;
+  store.failMedium = false;
+  releaseSecond.resolve();
+  const follower = await second;
+  expect(winner.status).toBe(200);
+  expect(follower.status).toBe(200);
+  expect(follower.body.variants).toEqual(winner.body.variants);
+  expect(winner.body.variants[1]).toEqual({ name: 'medium', status: 'failed', url: null });
+  expect(await store.head('public', `${id}/medium.webp`)).toBeNull();
+});
 
 test.each(['application/pdf', 'text/plain', 'image/gif'])('a %s File has no Variants', async contentType => {
   const id = await upload(new Uint8Array([1, 2, 3, 4]), contentType);
