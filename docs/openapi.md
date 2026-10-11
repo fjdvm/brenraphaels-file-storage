@@ -1,0 +1,22 @@
+# OpenAPI document
+
+`GET /openapi.json` returns an OpenAPI 3.1 document describing every endpoint with its
+inputs, responses and errors. It needs no `X-System-Code`.
+
+It is generated, not written by hand:
+
+- `src/files/schemas.ts` holds the Zod schemas. Routes validate request bodies and query
+  strings with them (`parseWith` in `src/http/files-router.ts`), and the document is built
+  from the same schemas.
+- `src/http/contract.ts` lists every route with its schemas, success status and errors.
+- `src/http/openapi.ts` turns that list into the document.
+
+Validation failures answer `400` with `{ "error": "<first problem>", "details": [{ "path", "message" }] }`.
+
+## Adding a route
+
+Add it to `routes` in `contract.ts`, register it with the same `routes.<name>.path`, and use
+its schemas to validate. `tests/integration/openapi.test.ts` fails when the app serves a
+route that is missing from the document (or the document lists one the app does not serve).
+Path ids are checked by the service (a malformed id answers `404`), so they are documented
+as UUIDs but not validated by the schemas.
