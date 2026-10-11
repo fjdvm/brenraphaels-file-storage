@@ -4,6 +4,7 @@ import { files } from '../db/schema.ts';
 import { writeAudit } from '../audit/write-audit.ts';
 import { HttpError } from '../http/errors.ts';
 import type { Bucket, ObjectStore } from '../storage/object-store.ts';
+import { createVariants, variantKey } from './variants.ts';
 
 export const MAX_SIZE = 25 * 1024 * 1024;
 export const UPLOAD_ADDRESS_SECONDS = 15 * 60;
@@ -24,10 +25,19 @@ const bucketOf = (row: Pick<Row, 'visibility'>): Bucket => row.visibility;
 const keyOf = (id: string) => `${id}/original`;
 const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-function present(row: Row) {
+function address({ store, publicBaseUrl }: FileDeps, row: Row, key: string) {
+  return row.visibility === 'public'
+    ? `${publicBaseUrl.replace(/\/+$/, '')}/${key}`
+    : store.presignGet('private', key, { expiresInSeconds: PRIVATE_VIEW_SECONDS });
+}
+
+async function present(row: Row, deps: FileDeps) {
   return {
     id: row.id, status: row.status, filename: row.filename, contentType: row.content_type, size: row.size,
     visibility: row.visibility, retentionType: row.retention_type, expiresAt: row.expires_at?.toISOString() ?? null,
+    variants: await Promise.all(row.variants.map(async variant => ({
+      ...variant, url: variant.status === 'ready' ? await address(deps, row, variantKey(row.id, variant.name)) : null,
+    }))),
   };
 }
 
@@ -38,7 +48,8 @@ function oneOf<T extends string>(body: Record<string, unknown>, field: string, a
   return value as T;
 }
 
-export async function requestUpload({ db, store }: FileDeps, caller: Caller, input: unknown) {
+export async function requestUpload(deps: FileDeps, caller: Caller, input: unknown) {
+  const { db, store } = deps;
   const body = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   const visibility = oneOf(body, 'visibility', ['public', 'private']);
   const retentionType = oneOf(body, 'retentionType', ['permanent', 'temporary']);
@@ -54,14 +65,15 @@ export async function requestUpload({ db, store }: FileDeps, caller: Caller, inp
   if (!row) throw new Error('Insert returned no row');
   const uploadUrl = await store.presignPut(bucketOf(row), keyOf(row.id), { contentType, expiresInSeconds: UPLOAD_ADDRESS_SECONDS });
   await writeAudit(db, { action: 'file.requested', fileId: row.id, ...caller, detail: { filename: row.filename, contentType, size, visibility, retentionType } });
-  return { ...present(row), uploadUrl, uploadUrlExpiresInSeconds: UPLOAD_ADDRESS_SECONDS };
+  return { ...await present(row, deps), uploadUrl, uploadUrlExpiresInSeconds: UPLOAD_ADDRESS_SECONDS };
 }
 
-export async function confirmUpload({ db, store }: FileDeps, caller: Caller, id: string) {
+export async function confirmUpload(deps: FileDeps, caller: Caller, id: string) {
+  const { db, store } = deps;
   const row = isUuid(id) ? (await db.select().from(files).where(eq(files.id, id)))[0] : undefined;
   if (!row) throw new HttpError(404, 'File not found');
   if (row.expires_at && row.expires_at <= new Date()) throw new HttpError(404, 'File not found');
-  if (row.status === 'active') return present(row);
+  if (row.status === 'active') return present(row, deps);
 
   const found = await store.head(bucketOf(row), keyOf(row.id));
   if (!found) throw new HttpError(409, 'No uploaded object found; upload to the signed address first');
@@ -74,27 +86,27 @@ export async function confirmUpload({ db, store }: FileDeps, caller: Caller, id:
     throw new HttpError(422, 'Uploaded object does not match the declared size or type; it was removed');
   }
 
+  const variants = await createVariants(store, bucketOf(row), row.id, row.content_type);
   const now = new Date();
   const expiresAt = row.retention_type === 'temporary' ? new Date(now.getTime() + TEMPORARY_DAYS * 86_400_000) : null;
-  const [active] = await db.update(files).set({ status: 'active', confirmed_at: now, expires_at: expiresAt })
+  const [active] = await db.update(files).set({ status: 'active', confirmed_at: now, expires_at: expiresAt, variants })
     .where(and(eq(files.id, row.id), eq(files.status, 'pending'))).returning();
   if (!active) { // lost a race with another confirm
     const [current] = await db.select().from(files).where(eq(files.id, row.id));
     if (!current) throw new HttpError(404, 'File not found');
-    return present(current);
+    return present(current, deps);
   }
   await writeAudit(db, { action: 'file.confirmed', fileId: row.id, ...caller });
-  return present(active);
+  return present(active, deps);
 }
 
-export async function viewFile({ db, store, publicBaseUrl }: FileDeps, caller: Caller, id: string) {
+export async function viewFile(deps: FileDeps, caller: Caller, id: string) {
+  const { db } = deps;
   const [row] = isUuid(id)
     ? await db.select().from(files).where(and(eq(files.id, id), eq(files.status, 'active'), or(isNull(files.expires_at), gt(files.expires_at, new Date()))))
     : [];
   if (!row) throw new HttpError(404, 'File not found');
-  const url = row.visibility === 'public'
-    ? `${publicBaseUrl.replace(/\/+$/, '')}/${keyOf(row.id)}`
-    : await store.presignGet('private', keyOf(row.id), { expiresInSeconds: PRIVATE_VIEW_SECONDS });
+  const url = await address(deps, row, keyOf(row.id));
   await writeAudit(db, { action: 'file.viewed', fileId: row.id, ...caller });
-  return { ...present(row), url };
+  return { ...await present(row, deps), url };
 }
