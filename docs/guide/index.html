@@ -61,7 +61,7 @@
 <div class="page">
   <div class="eyebrow">Documentation</div>
   <h1>How to use the File Storage API</h1>
-  <p class="lede">The company's single place to keep uploaded files. This page covers every endpoint, the headers it needs and the errors it can answer with, plus one worked example each. It is written for the developers of POS, CRMS, IMS, HRMS and ECOM.</p>
+  <p class="lede">The company's single place to keep uploaded files. This page covers every endpoint, the headers it needs and the errors it can answer with, plus one worked example each. It is written for the developers of POS, CRMS, IMS, HRMS, ECOM, the Portal, Authentication, notifications and file-storage.</p>
   <div class="meta"><span>One File, every Client System</span><span>·</span><span>System-code access</span><span>·</span>
     <label>Base URL for examples <input type="text" id="base" placeholder="https://your-file-storage.example" autocomplete="off" aria-label="Base URL for examples"></label></div>
   <hr>
@@ -81,7 +81,7 @@ const linkBody = '{"system":"IMS","entityType":"product","entityId":"42","role":
 const ID = '6f0c9a52-3d1e-4c8e-9a53-0f4b8b1d2c77';
 const SECTIONS = [
 { id:'basics', title:'Start here', role:'open', intro:
-  `Every route except the four listed under <em>No header</em> is reached through the gateway, which sends <code>Authorization: Bearer &lt;gateway secret&gt;</code>; a missing or wrong secret answers 401. Each also needs <code>X-System-Code</code>: the code of the calling Client System (<code>POS</code>, <code>CRMS</code>, <code>IMS</code>, <code>HRMS</code> or <code>ECOM</code>). A missing or unknown code answers 401. <code>X-Actor-Id</code> is optional: the person or process that acted, recorded in the audit history. JSON in and out. Errors are <code>{"error": "…"}</code>, plus <code>details</code> (a list of <code>{path, message}</code>) for validation problems. Uploads are two steps: ask for an upload address, <code>PUT</code> the bytes to it, then confirm. Any Client System can view, edit, replace or delete any File.`,
+  `Every route except the four listed under <em>No header</em> is reached through the gateway, which sends <code>Authorization: Bearer &lt;gateway secret&gt;</code>; a missing or wrong secret answers 401. Each also needs <code>X-System-Code</code>: the code of the calling Client System (<code>POS</code>, <code>CRMS</code>, <code>IMS</code>, <code>HRMS</code>, <code>ECOM</code>, <code>PORTAL</code>, <code>AUTH</code>, <code>FILE_STORAGE</code> or <code>NOTIFICATIONS</code>). A missing or unknown code answers 401. <code>X-Actor-Id</code> is optional: the person or process that acted, recorded in the audit history. JSON in and out. Errors are <code>{"error": "…"}</code>, plus <code>details</code> (a list of <code>{path, message}</code>) for validation problems. Uploads are two steps: ask for an upload address, <code>PUT</code> the bytes to it, then confirm. Any Client System can view, edit, replace or delete any File.`,
   tables:[{ title:'Public or Private', narrow:true, head:['Visibility','Who can view','The <code>url</code> you get back'], rows:[
     ['<strong>Public</strong>','Anyone with the address','A permanent CDN address. Safe to put straight into a page or an <code>&lt;img&gt;</code>'],
     ['<strong>Private</strong>','Only through a short-lived signed address','Signed and valid for five minutes, issued fresh on every view. Do not store it; ask again with <code>GET /files/:id</code>']]},
