@@ -30,8 +30,8 @@ it when a route changes; `tests/integration/docs.test.ts` fails if a route in `c
 
 ## MCP endpoint
 
-`POST /mcp` is a stateless remote MCP server (`src/mcp/`). It sits behind the same `X-System-Code`
-check, so the system code and optional `X-Actor-Id` of the client's configured headers are the
+`POST /mcp` is a stateless remote MCP server (`src/mcp/`). It sits behind the same gateway-secret and `X-System-Code`
+checks, so the system code and optional `X-Actor-Id` of the client's configured headers are the
 caller of every tool. Each tool in `src/mcp/tools.ts` validates with the same Zod schema as its
 route and calls the same function in `src/files/files.ts`; failures come back as tool errors with
 the API's message. `request_upload` and `replace_file` add an `uploadCommand` (a `curl` PUT) so the

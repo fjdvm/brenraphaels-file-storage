@@ -6,7 +6,7 @@ import { FakeR2 } from '../support/fake-r2.ts';
 import { routes } from '../../src/http/contract.ts';
 
 // The guide is static, so no query runs and no database is needed.
-const app = createApp({ pool: new Pool(), store: new FakeR2(), publicBaseUrl: 'https://cdn.test', cronSecret: 'secret' });
+const app = createApp({ pool: new Pool(), store: new FakeR2(), publicBaseUrl: 'https://cdn.test', cronSecret: 'secret', gatewaySecret: 'gateway' });
 
 async function guide() {
   const response = await request(app).get('/docs');

@@ -1,21 +1,58 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import request from 'supertest';
 import type { Pool } from 'pg';
-import { createTestApp } from '../support/test-app.ts';
+import { createTestApp, gatewaySecret } from '../support/test-app.ts';
 import type { FakeR2 } from '../support/fake-r2.ts';
 import { writeAudit } from '../../src/audit/write-audit.ts';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
 let app: Awaited<ReturnType<typeof createTestApp>>['app'];
+let rawApp: Awaited<ReturnType<typeof createTestApp>>['rawApp'];
 let pool: Pool;
 let store: FakeR2;
-beforeAll(async () => { ({ app, pool, store } = await createTestApp()); });
+beforeAll(async () => { ({ app, rawApp, pool, store } = await createTestApp()); });
 afterAll(async () => { await pool.end(); });
 
 test('health answers without a system code', async () => {
   const response = await request(app).get('/health');
   expect(response.status).toBe(200);
   expect(response.body).toEqual({ status: 'ok' });
+});
+
+test('API routes refuse a missing gateway secret', async () => {
+  const response = await request(rawApp).get('/files/anything').set('X-System-Code', 'POS');
+  expect(response.status).toBe(401);
+  expect(response.body).toEqual({ error: 'Invalid gateway secret' });
+});
+
+test('API routes refuse a wrong gateway secret', async () => {
+  const response = await request(rawApp).get('/files/anything').set('X-System-Code', 'POS').set('Authorization', 'Bearer nope');
+  expect(response.status).toBe(401);
+});
+
+test('the MCP endpoint refuses a missing gateway secret', async () => {
+  const response = await request(rawApp).post('/mcp').set('X-System-Code', 'POS').send({});
+  expect(response.status).toBe(401);
+});
+
+test('the gateway secret with a valid system code reaches the route lookup', async () => {
+  const response = await request(rawApp).get('/nowhere').set('Authorization', `Bearer ${gatewaySecret}`).set('X-System-Code', 'POS');
+  expect(response.status).toBe(404);
+});
+
+test('the gateway secret does not replace the system code', async () => {
+  const response = await request(rawApp).get('/files/anything').set('Authorization', `Bearer ${gatewaySecret}`);
+  expect(response.status).toBe(401);
+  expect(response.body).toEqual({ error: 'X-System-Code header is required' });
+});
+
+test('health, docs and OpenAPI stay open without the secret', async () => {
+  for (const path of ['/health', '/docs', '/openapi.json']) expect((await request(rawApp).get(path)).status).toBe(200);
+});
+
+test('the cleanup route keeps its own cron authentication', async () => {
+  expect((await request(rawApp).get('/cron/cleanup').set('Authorization', 'Bearer test-cron-secret')).status).not.toBe(401);
+  expect((await request(rawApp).get('/cron/cleanup').set('Authorization', `Bearer ${gatewaySecret}`)).status).toBe(401);
 });
 
 test('other routes refuse a missing system code', async () => {

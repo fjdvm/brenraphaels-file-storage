@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { S3Client } from '@aws-sdk/client-s3';
 import request from 'supertest';
 import sharp from 'sharp';
-import { createTestApp } from '../support/test-app.ts';
+import { createTestApp, gatewaySecret } from '../support/test-app.ts';
 import { createApp } from '../../src/http/app.ts';
 import { R2ObjectStore } from '../../src/storage/r2.ts';
 
@@ -72,14 +72,14 @@ test('an uppercase File id deletes the same stored objects', async () => {
 
 test('an R2 per-object delete failure returns an error and allows retry', async () => {
   const { id } = await uploadText();
-  const app = createApp({ pool: context.pool, publicBaseUrl: 'https://cdn.test', cronSecret: 'test-cron-secret', store: new R2ObjectStore({
+  const app = createApp({ pool: context.pool, publicBaseUrl: 'https://cdn.test', cronSecret: 'test-cron-secret', gatewaySecret, store: new R2ObjectStore({
     accountId: 'test', accessKeyId: 'test', secretAccessKey: 'test', publicBucket: 'public', privateBucket: 'private',
   }) });
   // Fake the external S3 responses, including an HTTP 200 with an object-level failure.
   vi.spyOn(S3Client.prototype, 'send')
     .mockImplementationOnce(async () => ({ Contents: [{ Key: `${id}/original` }] }))
     .mockImplementationOnce(async () => ({ Errors: [{ Key: `${id}/original`, Code: 'InternalError' }] }));
-  await request(app).delete(`/files/${id}`).set(deletingCaller).expect(500);
+  await request(app).delete(`/files/${id}`).set({ ...deletingCaller, Authorization: `Bearer ${gatewaySecret}` }).expect(500);
   await request(context.app).get(`/files/${id}`).set(headers).expect(200);
   const listed = await request(context.app).get('/files').set(headers).query(link).expect(200);
   expect(listed.body.files.map((file: { id: string }) => file.id)).toEqual([id]);

@@ -73,7 +73,7 @@
 <script>
 /* Mirrors docs/*.md and GET /openapi.json, the reference. Update them together. */
 const ROLES = { system:['X-System-Code','b-system'], open:['no header','b-open'], cron:['cron secret','b-cron'] };
-const H = '-H "X-System-Code: IMS" -H "X-Actor-Id: user-1"';
+const H = '-H "Authorization: Bearer $GATEWAY_SECRET" -H "X-System-Code: IMS" -H "X-Actor-Id: user-1"';
 const file = (extra = '') => `{ "id": "6f0c9a52-3d1e-4c8e-9a53-0f4b8b1d2c77", "status": "active", "filename": "cover.jpg",
   "contentType": "image/jpeg", "size": 48213, "visibility": "public", "retentionType": "permanent",
   "expiresAt": null, "variants": [ { "name": "small", "status": "ready", "url": "https://cdn.example/6f0c9a52-…/small.webp" }, … ]${extra} }`;
@@ -81,7 +81,7 @@ const linkBody = '{"system":"IMS","entityType":"product","entityId":"42","role":
 const ID = '6f0c9a52-3d1e-4c8e-9a53-0f4b8b1d2c77';
 const SECTIONS = [
 { id:'basics', title:'Start here', role:'open', intro:
-  `Every route except the four listed under <em>No header</em> needs <code>X-System-Code</code>: the code of the calling Client System (<code>POS</code>, <code>CRMS</code>, <code>IMS</code>, <code>HRMS</code> or <code>ECOM</code>). A missing or unknown code answers 401. <code>X-Actor-Id</code> is optional: the person or process that acted, recorded in the audit history. JSON in and out. Errors are <code>{"error": "…"}</code>, plus <code>details</code> (a list of <code>{path, message}</code>) for validation problems. Uploads are two steps: ask for an upload address, <code>PUT</code> the bytes to it, then confirm. Any Client System can view, edit, replace or delete any File.`,
+  `Every route except the four listed under <em>No header</em> is reached through the gateway, which sends <code>Authorization: Bearer &lt;gateway secret&gt;</code>; a missing or wrong secret answers 401. Each also needs <code>X-System-Code</code>: the code of the calling Client System (<code>POS</code>, <code>CRMS</code>, <code>IMS</code>, <code>HRMS</code> or <code>ECOM</code>). A missing or unknown code answers 401. <code>X-Actor-Id</code> is optional: the person or process that acted, recorded in the audit history. JSON in and out. Errors are <code>{"error": "…"}</code>, plus <code>details</code> (a list of <code>{path, message}</code>) for validation problems. Uploads are two steps: ask for an upload address, <code>PUT</code> the bytes to it, then confirm. Any Client System can view, edit, replace or delete any File.`,
   tables:[{ title:'Public or Private', narrow:true, head:['Visibility','Who can view','The <code>url</code> you get back'], rows:[
     ['<strong>Public</strong>','Anyone with the address','A permanent CDN address. Safe to put straight into a page or an <code>&lt;img&gt;</code>'],
     ['<strong>Private</strong>','Only through a short-lived signed address','Signed and valid for five minutes, issued fresh on every view. Do not store it; ask again with <code>GET /files/:id</code>']]},
@@ -105,7 +105,7 @@ const SECTIONS = [
     ['<code>visibility</code>','yes','<code>public</code> or <code>private</code>. Fixed from now on'],
     ['<code>retentionType</code>','yes','<code>permanent</code> or <code>temporary</code>'],
     ['<code>link</code>','no','<code>{system, entityType, entityId, role}</code>, see Add a Link']]}],
-  responses:[['201','The File (<code>status: "pending"</code>) plus <code>uploadUrl</code> and <code>uploadUrlExpiresInSeconds</code>'],['400','Invalid body, for example a disallowed type or a size over 25 MB'],['401','Missing or unknown system code']],
+  responses:[['201','The File (<code>status: "pending"</code>) plus <code>uploadUrl</code> and <code>uploadUrlExpiresInSeconds</code>'],['400','Invalid body, for example a disallowed type or a size over 25 MB'],['401','Missing gateway secret, or missing or unknown system code']],
   example:`curl -X POST "$BASE_URL/files" ${H} -H "Content-Type: application/json" \\
   -d '{"filename":"cover.jpg","contentType":"image/jpeg","size":48213,
        "visibility":"public","retentionType":"permanent","link":${linkBody}}'
@@ -185,23 +185,23 @@ ${file()}` },
     ['<code>replace_file</code>','<code>POST /files/:id/replacement</code>','Returns <code>uploadCommand</code> too'],
     ['<code>confirm_replacement</code>','<code>POST /files/:id/replacement/confirm</code>',''],
     ['<code>delete_file</code>','<code>DELETE /files/:id</code>','']]}],
-  responses:[['200','A JSON-RPC reply. A failed tool call is a result with <code>isError: true</code> and the API’s message'],['400','Not a valid JSON-RPC request'],['401','Missing or unknown system code']],
+  responses:[['200','A JSON-RPC reply. A failed tool call is a result with <code>isError: true</code> and the API’s message'],['400','Not a valid JSON-RPC request'],['401','Missing gateway secret, or missing or unknown system code']],
   example:`# Claude Code
 claude mcp add --transport http file-storage $BASE_URL/mcp \\
-  --header "X-System-Code: IMS" --header "X-Actor-Id: your-name"
+  --header "Authorization: Bearer $GATEWAY_SECRET" --header "X-System-Code: IMS" --header "X-Actor-Id: your-name"
 
 # Codex: add to ~/.codex/config.toml
 [mcp_servers.file-storage]
 url = "$BASE_URL/mcp"
-http_headers = { "X-System-Code" = "IMS", "X-Actor-Id" = "your-name" }
+http_headers = { "Authorization" = "Bearer $GATEWAY_SECRET", "X-System-Code" = "IMS", "X-Actor-Id" = "your-name" }
 
 # Cursor: add to ~/.cursor/mcp.json (or .cursor/mcp.json in a project)
 { "mcpServers": { "file-storage": { "url": "$BASE_URL/mcp",
-    "headers": { "X-System-Code": "IMS", "X-Actor-Id": "your-name" } } } }
+    "headers": { "Authorization": "Bearer $GATEWAY_SECRET", "X-System-Code": "IMS", "X-Actor-Id": "your-name" } } } }
 
 # Kiro: add to .kiro/settings/mcp.json (or ~/.kiro/settings/mcp.json)
 { "mcpServers": { "file-storage": { "url": "$BASE_URL/mcp",
-    "headers": { "X-System-Code": "IMS", "X-Actor-Id": "your-name" } } } }` },
+    "headers": { "Authorization": "Bearer $GATEWAY_SECRET", "X-System-Code": "IMS", "X-Actor-Id": "your-name" } } } }` },
 { id:'get-health', title:'Health check', method:'GET', path:'/health', role:'open', intro:'Answers when the service is running. No header needed.',
   responses:[['200','<code>{"status":"ok"}</code>']],
   example:`curl "$BASE_URL/health"

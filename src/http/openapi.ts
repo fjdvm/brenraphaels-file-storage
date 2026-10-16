@@ -56,10 +56,11 @@ export function buildOpenApiDocument(): Json {
   return {
     openapi: '3.1.0',
     info: { title: 'File storage', version: '1.0.0', description: 'The company\'s single place to keep uploaded files.' },
-    security: [{ SystemCode: [] }],
+    security: [{ GatewaySecret: [], SystemCode: [] }],
     paths,
     components: {
       securitySchemes: {
+        GatewaySecret: { type: 'http', scheme: 'bearer', description: 'The GATEWAY_SECRET, sent by the gateway on every API request.' },
         CronSecret: { type: 'http', scheme: 'bearer', description: 'The CRON_SECRET, sent by Vercel Cron.' },
         SystemCode: { type: 'apiKey', in: 'header', name: 'X-System-Code', description: 'Code of the calling Client System.' },
       },

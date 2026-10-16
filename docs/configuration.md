@@ -25,3 +25,4 @@ The pre-existing `br-file-storage` bucket is unrelated and must not be touched.
 | `DATABASE_URL` | Neon pooled connection string (runtime) |
 | `DATABASE_URL_UNPOOLED` | Neon direct connection string (migrations) |
 | `CRON_SECRET` | Shared secret authorising the daily cleanup call |
+| `GATEWAY_SECRET` | Shared secret the gateway sends as `Authorization: Bearer ...` on every API request |
