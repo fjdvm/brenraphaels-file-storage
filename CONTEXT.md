@@ -7,7 +7,7 @@ The company's single place to keep uploaded files for its applications. Applicat
 ### Callers
 
 **Client System**:
-An application that uses file storage: POS, CRMS, IMS, HRMS or ECOM. Identifies itself on every request by its code.
+An application or service that uses file storage: POS, CRMS, IMS, HRMS, ECOM, PORTAL, AUTH, FILE_STORAGE or NOTIFICATIONS. Identifies itself on every request by its code.
 _Avoid_: Source (audit-logs term), Tenant, Consumer, App
 
 ### Files
