@@ -35,6 +35,11 @@ test('the MCP endpoint refuses a missing gateway secret', async () => {
   expect(response.status).toBe(401);
 });
 
+test('the gateway secret with a valid system code reaches the route lookup', async () => {
+  const response = await request(rawApp).get('/nowhere').set('Authorization', `Bearer ${gatewaySecret}`).set('X-System-Code', 'POS');
+  expect(response.status).toBe(404);
+});
+
 test('the gateway secret does not replace the system code', async () => {
   const response = await request(rawApp).get('/files/anything').set('Authorization', `Bearer ${gatewaySecret}`);
   expect(response.status).toBe(401);
