@@ -5,8 +5,9 @@ import { createTestApp } from '../support/test-app.ts';
 import { routes } from '../../src/http/contract.ts';
 
 let app: Awaited<ReturnType<typeof createTestApp>>['app'];
+let rawApp: Awaited<ReturnType<typeof createTestApp>>['rawApp'];
 let pool: Pool;
-beforeAll(async () => { ({ app, pool } = await createTestApp()); });
+beforeAll(async () => { ({ app, rawApp, pool } = await createTestApp()); });
 afterAll(async () => { await pool.end(); });
 
 interface Layer { route?: { path: string; methods: Record<string, boolean> }; handle?: { stack?: Layer[] } }
@@ -28,7 +29,7 @@ test('the document is served without a system code', async () => {
 });
 
 test('every route the app serves is in the document, and nothing else is', async () => {
-  const served = servedRoutes((app as any).router.stack).map(route => {
+  const served = servedRoutes((rawApp as any).router.stack).map(route => {
     const [method, path] = route.split(' ') as [string, string];
     return `${method} ${toOpenApi(path)}`;
   }).sort();

@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { ObjectStore } from '../storage/object-store.ts';
 import { errorHandler, notFound } from './errors.ts';
+import { requireGatewaySecret } from './middleware/gateway-secret.ts';
 import { requireSystemCode } from './middleware/system-code.ts';
 import { cronRouter } from './cron-router.ts';
 import { filesRouter } from './files-router.ts';
@@ -12,9 +13,9 @@ import { buildOpenApiDocument } from './openapi.ts';
 import { mcpRouter } from '../mcp/mcp-router.ts';
 import { guide } from './docs.ts';
 
-export interface AppDeps { pool: Pool; store: ObjectStore; publicBaseUrl: string; cronSecret: string }
+export interface AppDeps { pool: Pool; store: ObjectStore; publicBaseUrl: string; cronSecret: string; gatewaySecret: string }
 
-export function createApp({ pool, store, publicBaseUrl, cronSecret }: AppDeps) {
+export function createApp({ pool, store, publicBaseUrl, cronSecret, gatewaySecret }: AppDeps) {
   const db = drizzle(pool);
   const app = express();
   const openApiDocument = buildOpenApiDocument();
@@ -25,9 +26,9 @@ export function createApp({ pool, store, publicBaseUrl, cronSecret }: AppDeps) {
 
   app.use(cronRouter({ db, store, cronSecret }));
 
-  // Everything below the open routes needs a known Client System.
+  // Everything below the open routes needs the gateway secret and a known Client System.
   const api = express.Router();
-  api.use(requireSystemCode(db), authenticate, express.json({ limit: '16kb' }));
+  api.use(requireGatewaySecret(gatewaySecret), requireSystemCode(db), authenticate, express.json({ limit: '16kb' }));
   api.use(filesRouter({ db, store, publicBaseUrl }));
   api.use(mcpRouter({ db, store, publicBaseUrl }));
   app.use(api);

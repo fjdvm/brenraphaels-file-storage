@@ -111,7 +111,7 @@ export const routes = {
 
 export const errorDescriptions: Record<number, string> = {
   400: 'The request is invalid.',
-  401: 'X-System-Code is missing or names an unknown Client System.',
+  401: 'The gateway secret is missing or wrong, or X-System-Code is missing or names an unknown Client System.',
   404: notFound,
   413: 'The JSON body is larger than 16 kb.',
   409: 'The File is not in a state that allows this, for example nothing has been uploaded yet.',

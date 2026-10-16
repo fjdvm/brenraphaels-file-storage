@@ -15,6 +15,7 @@ const server = express().use(createApp({
   pool,
   publicBaseUrl: required('R2_PUBLIC_BASE_URL'),
   cronSecret: required('CRON_SECRET'),
+  gatewaySecret: required('GATEWAY_SECRET'),
   store: new R2ObjectStore({
     accountId: required('R2_ACCOUNT_ID'), accessKeyId: required('R2_ACCESS_KEY_ID'), secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
     publicBucket: required('R2_PUBLIC_BUCKET'), privateBucket: required('R2_PRIVATE_BUCKET'),
