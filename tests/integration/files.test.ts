@@ -137,11 +137,52 @@ test('a Private File is viewed through a 5 minute signed address', async () => {
   expect(viewed.body.url).toContain('expires=300');
 });
 
+test.each([
+  ['video/mp4', 'evidence.mp4', 'public'],
+  ['video/mp4', 'evidence.mp4', 'private'],
+  ['video/quicktime', 'evidence.mov', 'public'],
+  ['video/quicktime', 'evidence.mov', 'private'],
+])('a %s File (%s, %s) is kept unchanged without Variants', async (contentType, filename, visibility) => {
+  const bytes = new Uint8Array(25 * 1024 * 1024);
+  bytes.set([0, 0, 0, 20, 102, 116, 121, 112]);
+  const requested = await requestUpload({ ...valid, filename, contentType, size: bytes.byteLength, visibility }, 'CRMS');
+  expect(requested.status).toBe(201);
+  store.upload(requested.body.uploadUrl, bytes, contentType);
+
+  const confirmed = await request(app).post(`/files/${requested.body.id}/confirm`).set(as('CRMS'));
+  expect(confirmed.status).toBe(200);
+  expect(confirmed.body).toMatchObject({ status: 'active', filename, contentType, size: bytes.byteLength, visibility, variants: [] });
+
+  const viewed = await request(app).get(`/files/${requested.body.id}`).set(as('ECOM'));
+  expect(viewed.status).toBe(200);
+  expect(viewed.body).toMatchObject({ contentType, size: bytes.byteLength, variants: [] });
+  expect(viewed.body.url).toBe(visibility === 'public'
+    ? `https://cdn.test/${requested.body.id}/original`
+    : `fake://private/${requested.body.id}/original?get&expires=300`);
+  expect([...store.objects.keys()]).toEqual([`${visibility}/${requested.body.id}/original`]);
+  const stored = store.objects.get(`${visibility}/${requested.body.id}/original`)!;
+  expect(stored.contentType).toBe(contentType);
+  expect(Buffer.compare(stored.body, bytes)).toBe(0);
+});
+
 test.each(['visibility', 'retentionType'])('missing %s returns 400 with a clear message', async field => {
   const { [field]: _omitted, ...rest } = valid as Record<string, unknown>;
   const response = await requestUpload(rest);
   expect(response.status).toBe(400);
   expect(response.body.error).toContain(field);
+});
+
+test.each(['video/webm', 'video/x-msvideo', 'video/mpeg'])('refuses %s with the existing allowed-type message', async contentType => {
+  const response = await requestUpload({ ...valid, contentType });
+  expect(response.status).toBe(400);
+  expect(response.body).toMatchObject({ error: 'contentType is not an allowed file type', details: [{ path: 'contentType' }] });
+  expect(store.objects.size).toBe(0);
+});
+
+test.each(['video/mp4', 'video/quicktime'])('refuses %s above the 25 MB cap', async contentType => {
+  const response = await requestUpload({ ...valid, contentType, size: 25 * 1024 * 1024 + 1 });
+  expect(response.status).toBe(400);
+  expect(response.body.error).toBe('size must be 25 MB or less');
 });
 
 test.each([

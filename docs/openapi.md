@@ -13,6 +13,11 @@ It is generated, not written by hand:
 
 Validation failures answer `400` with `{ "error": "<first problem>", "details": [{ "path", "message" }] }`.
 
+Upload and replacement requests accept MP4 (`video/mp4`) and MOV (`video/quicktime`)
+alongside the existing image and document types, up to 25 MB. Other video types
+are refused with `contentType is not an allowed file type`. Videos are kept
+unchanged, without Variants, and viewed through the usual Public or signed Private address.
+
 ## Adding a route
 
 Add it to `routes` in `contract.ts`, register it with the same `routes.<name>.path`, and use
