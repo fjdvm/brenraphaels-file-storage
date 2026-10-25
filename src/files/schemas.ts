@@ -6,6 +6,7 @@ import { z } from 'zod';
 export const MAX_SIZE = 25 * 1024 * 1024;
 export const ALLOWED_TYPE_LIST = [
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'video/mp4', 'video/quicktime',
   'application/pdf', 'text/plain', 'text/csv',
   'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

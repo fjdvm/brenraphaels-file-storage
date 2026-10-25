@@ -88,7 +88,7 @@ const SECTIONS = [
   { title:'Rules to know', narrow:true, head:['Topic','Note'], rows:[
     ['Visibility','Chosen when the File is created and never changed. Sending <code>visibility</code> to an edit or replacement answers 400'],
     ['Retention type','<code>permanent</code> is kept until removed. <code>temporary</code> is removed automatically 7 days after upload unless promoted to permanent'],
-    ['Allowed types','PNG, JPEG, GIF, WebP, PDF, plain text, CSV, Word and Excel (<code>.doc</code> <code>.docx</code> <code>.xls</code> <code>.xlsx</code>). 25 MB at most'],
+    ['Allowed types','PNG, JPEG, GIF, WebP, MP4 (<code>video/mp4</code>), MOV (<code>video/quicktime</code>), PDF, plain text, CSV, Word and Excel (<code>.doc</code> <code>.docx</code> <code>.xls</code> <code>.xlsx</code>). 25 MB at most. Videos are kept unchanged, with no Variants, and viewed through the usual Public or signed Private address'],
     ['Variants','Confirming a JPEG, PNG or WebP makes small (150 px), medium (600 px) and large (1200 px) WebP copies, with the same Visibility. Other files have <code>"variants": []</code>'],
     ['Bodies','JSON bodies are limited to 16 kb']]},
   { title:'Errors on every route that needs X-System-Code', narrow:true, head:['Status','When','Body'], rows:[

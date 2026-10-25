@@ -7,7 +7,9 @@ respect their orientation, and are never enlarged. Generation uses
 [sharp's resize options](https://sharp.pixelplumbing.com/api-resize/).
 
 Every File response includes a `variants` array. Pending uploads and other
-types, including GIF, return `[]`. Confirm and view responses for a picture
+types, including GIF and MP4/MOV videos, return `[]`. Videos (`video/mp4` and
+`video/quicktime`) are kept unchanged, up to the same 25 MB cap, and viewed
+through the usual Public or signed Private address. Confirm and view responses for a picture
 include entries in small, medium, large order:
 
 ```json

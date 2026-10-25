@@ -92,7 +92,7 @@ test('failures come back as tool errors with the API message', async () => {
   const missing = await call('view_file', { id: '00000000-0000-4000-8000-000000000000' });
   expect(missing).toMatchObject({ isError: true, text: 'File not found' });
 
-  const invalid = await call('request_upload', { ...upload, contentType: 'video/mp4' });
+  const invalid = await call('request_upload', { ...upload, contentType: 'video/webm' });
   expect(invalid).toMatchObject({ isError: true, text: 'contentType is not an allowed file type' });
 
   const id = await activeFile();

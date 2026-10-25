@@ -64,3 +64,11 @@ test('the body schema in the document matches what the route enforces', async ()
   const refused = await request(app).post('/files').set(headers).send({ ...body, size: maxSize + 1 }).expect(400);
   expect(refused.body).toMatchObject({ error: 'size must be 25 MB or less', details: [{ path: 'size' }] });
 });
+
+test('upload and replacement schemas list MP4 and MOV as the only allowed video types', async () => {
+  const { paths } = await document();
+  for (const path of ['/files', '/files/{id}/replacement']) {
+    const types: string[] = paths[path]!.post.requestBody.content['application/json'].schema.properties.contentType.enum;
+    expect(types.filter(type => type.startsWith('video/'))).toEqual(['video/mp4', 'video/quicktime']);
+  }
+});
