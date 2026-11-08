@@ -61,7 +61,7 @@ export function buildOpenApiDocument(): Json {
     components: {
       securitySchemes: {
         GatewaySecret: { type: 'http', scheme: 'bearer', description: 'The GATEWAY_SECRET, sent by the gateway on every API request.' },
-        CronSecret: { type: 'http', scheme: 'bearer', description: 'The CRON_SECRET, sent by Vercel Cron.' },
+        CronSecret: { type: 'http', scheme: 'bearer', description: 'The CRON_SECRET, sent by GitHub Actions.' },
         SystemCode: { type: 'apiKey', in: 'header', name: 'X-System-Code', description: 'Code of the calling Client System.' },
       },
       parameters: { ActorId: { name: 'X-Actor-Id', in: 'header', required: false, description: 'Who acted, recorded in the audit history.', schema: { type: 'string' } } },
