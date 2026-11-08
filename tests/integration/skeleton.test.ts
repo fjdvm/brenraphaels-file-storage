@@ -84,9 +84,9 @@ test('malformed JSON uses the short error shape', async () => {
   expect(response.body).toEqual({ error: 'Invalid request' });
 });
 
-test('seeds only the five Client Systems and has no API keys table', async () => {
+test('seeds the known Client Systems and has no API keys table', async () => {
   const systems = await pool.query('SELECT code FROM client_systems ORDER BY code');
-  expect(systems.rows.map(row => row.code)).toEqual(['CRMS', 'ECOM', 'HRMS', 'IMS', 'POS']);
+  expect(systems.rows.map(row => row.code)).toEqual(['AUTH', 'CRMS', 'ECOM', 'FILE_STORAGE', 'HRMS', 'IMS', 'NOTIFICATIONS', 'POS', 'PORTAL'].sort());
   const keys = await pool.query("SELECT to_regclass('api_keys') AS found");
   expect(keys.rows[0].found).toBeNull();
 });
