@@ -6,7 +6,7 @@ import { runCleanup } from '../files/cleanup.ts';
 import { routes } from './contract.ts';
 import { HttpError } from './errors.ts';
 
-// Vercel Cron calls this with `Authorization: Bearer $CRON_SECRET`. It sits outside the Client System checks.
+// GitHub Actions calls this with `Authorization: Bearer $CRON_SECRET`. It sits outside the Client System checks.
 export function cronRouter({ db, store, cronSecret }: { db: NodePgDatabase; store: ObjectStore; cronSecret: string }) {
   if (!cronSecret) throw new Error('CRON_SECRET is required');
   const router = express.Router();

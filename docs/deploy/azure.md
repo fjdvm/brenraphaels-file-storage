@@ -12,6 +12,7 @@ Every push to `main` runs `.github/workflows/container.yml`: typecheck, tests, b
 | `GHCR_PULL_TOKEN`, `GHCR_USERNAME` | secret / variable | read:packages pull token (Ticket#141) |
 | `DATABASE_URL` | secret | Neon pooled connection (runtime) |
 | `DATABASE_URL_UNPOOLED` | secret | Neon direct connection (migrations, run in CI) |
+| `FILE_STORAGE_URL` | variable | Azure HTTPS base address used by nightly cleanup |
 | `GATEWAY_SECRET`, `CRON_SECRET` | secret | see [configuration](../configuration.md) |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | secret | R2 API token |
 | `R2_PUBLIC_BUCKET`, `R2_PRIVATE_BUCKET`, `R2_PUBLIC_BASE_URL` | variable | bucket names and public address |
@@ -20,7 +21,7 @@ Secrets become Container App secrets referenced by env vars of the same name. No
 
 ## Cleanup
 
-The daily `/cron/cleanup` call still comes from Vercel Cron until the GitHub Actions schedule replaces it in a later ticket; send `Authorization: Bearer $CRON_SECRET`.
+The daily `/cron/cleanup` call comes from `.github/workflows/cleanup.yml` at 03:00 UTC with `Authorization: Bearer $CRON_SECRET`. It can also be dispatched manually. See [cleanup](../cleanup.md) for configuration and recovery.
 
 ## Switching callers
 
