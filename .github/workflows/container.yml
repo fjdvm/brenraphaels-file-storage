@@ -1,0 +1,126 @@
+name: Container, smoke test and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports: ['54331:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://postgres:test@127.0.0.1:54331/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: file-storage:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test the image (health, gateway secret, authenticated upload request)
+        run: bash scripts/container-smoke/run.sh
+        env:
+          IMAGE: file-storage:smoke
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: container-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    concurrency:
+      group: azure-deploy
+      cancel-in-progress: false
+    env:
+      IMAGE: ghcr.io/fjdvm/brenraphaels-file-storage:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply pending migrations (idempotent)
+        run: node scripts/migrate.ts
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}
+            ghcr.io/fjdvm/brenraphaels-file-storage:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy Container App (min 0 replicas)
+        id: deploy
+        run: ./scripts/azure-deploy.sh
+        env:
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GATEWAY_SECRET: ${{ secrets.GATEWAY_SECRET }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BUCKET: ${{ vars.R2_PUBLIC_BUCKET }}
+          R2_PRIVATE_BUCKET: ${{ vars.R2_PRIVATE_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+      - name: Verify health (wakes from zero) and scale settings
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "https://${{ steps.deploy.outputs.fqdn }}/health"; then break; fi
+            [ "$attempt" = 30 ] && exit 1
+            sleep 5
+          done
+          counts=$(az containerapp show -n file-storage -g rg-brenraphaels \
+            --query "properties.template.scale.minReplicas" -o tsv)
+          echo "min replicas: $counts"
+          test "$counts" = "0"
