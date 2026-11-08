@@ -1,0 +1,32 @@
+name: Deploy to Azure Container Apps
+
+# Builds the Dockerfile in Azure Container Registry and rolls out a new revision.
+# Does nothing until the repository variables below are set (see docs/deploy/azure.md).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ vars.AZURE_CONTAINER_APP != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: Dockerfile
+          acrName: ${{ vars.AZURE_ACR_NAME }}
+          resourceGroup: ${{ vars.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ vars.AZURE_CONTAINER_APP }}
+          imageToBuild: ${{ vars.AZURE_ACR_NAME }}.azurecr.io/${{ vars.AZURE_CONTAINER_APP }}:${{ github.sha }}
