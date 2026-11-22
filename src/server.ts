@@ -10,7 +10,6 @@ function required(name: string) {
 }
 const pool = new Pool({ connectionString: required('DATABASE_URL') });
 const port = Number(process.env.PORT ?? 3000);
-// Vercel only detects an Express entrypoint (app, index or server in the root or src/) that imports express.
 const server = express().use(createApp({
   pool,
   publicBaseUrl: required('R2_PUBLIC_BASE_URL'),

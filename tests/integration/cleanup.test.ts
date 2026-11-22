@@ -110,8 +110,3 @@ test.each([[{}], [{ Authorization: 'Bearer wrong' }], [{ Authorization: 'test-cr
   expect(store.objects.has(`public/${id}/original`)).toBe(true);
   expect((await pool.query("SELECT 1 FROM file_audit_entries WHERE system_code = 'CRON'")).rowCount).toBe(0);
 });
-
-test('the cleanup is registered as a daily Vercel cron', async () => {
-  const config = JSON.parse((await import('node:fs')).readFileSync('vercel.json', 'utf8'));
-  expect(config.crons).toEqual([{ path: '/cron/cleanup', schedule: '0 3 * * *' }]);
-});

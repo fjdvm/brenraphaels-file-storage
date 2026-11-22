@@ -18,7 +18,7 @@ export interface RouteSpec {
   errors: number[];
   /** Skips the Client System check. */
   open?: boolean;
-  /** Called by Vercel Cron with a bearer secret instead of a Client System code. */
+  /** Called by GitHub Actions with a bearer secret instead of a Client System code. */
   cron?: boolean;
 }
 
@@ -41,7 +41,7 @@ export const routes = {
     success: { status: 200, description: 'The guide page.' }, errors: [], open: true,
   },
   cleanup: {
-    method: 'get', path: '/cron/cleanup', summary: 'Remove expired Files and stale uploads (called daily by Vercel Cron)',
+    method: 'get', path: '/cron/cleanup', summary: 'Remove expired Files and stale uploads (called daily by GitHub Actions)',
     success: { status: 200, description: 'Everything due was removed.', schema: cleanupResponse },
     errors: [401, 500], open: true, cron: true,
   },

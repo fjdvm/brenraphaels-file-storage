@@ -1,0 +1,44 @@
+name: Nightly cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clean up expired Files on Azure
+        env:
+          FILE_STORAGE_URL: ${{ vars.FILE_STORAGE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${FILE_STORAGE_URL:?Set the FILE_STORAGE_URL repository variable to the Azure HTTPS address}"
+          : "${CRON_SECRET:?Set the CRON_SECRET repository secret}"
+          [[ "$FILE_STORAGE_URL" == https://* ]] || { echo 'FILE_STORAGE_URL must use HTTPS'; exit 1; }
+          url="${FILE_STORAGE_URL%/}/cron/cleanup"
+          # Verify both unauthenticated and incorrectly authenticated requests are refused.
+          for mode in missing wrong; do
+            headers=()
+            if [[ "$mode" == wrong ]]; then headers=(-H 'Authorization: Bearer invalid-cleanup-secret'); fi
+            status=$(curl --silent --show-error --connect-timeout 30 --max-time 180 \
+              --output /dev/null --write-out '%{http_code}' "${headers[@]}" "$url")
+            [[ "$status" == 401 ]] || { echo "Expected 401 for $mode secret, received $status"; exit 1; }
+          done
+          # Allow a scaled-to-zero replica time to wake. Do not retry a destructive cleanup.
+          status=$(curl --silent --show-error --connect-timeout 30 --max-time 300 \
+            --output cleanup-result.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" "$url")
+          [[ "$status" == 200 ]] || { echo "Cleanup failed with HTTP $status"; exit 1; }
+          cat cleanup-result.json

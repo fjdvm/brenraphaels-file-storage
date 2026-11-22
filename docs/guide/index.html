@@ -213,7 +213,7 @@ http_headers = { "Authorization" = "Bearer $GATEWAY_SECRET", "X-System-Code" = "
 { id:'get-docs', title:'This guide', method:'GET', path:'/docs', role:'open', intro:'The page you are reading. No header needed.',
   responses:[['200','This HTML page']],
   example:`curl "$BASE_URL/docs"` },
-{ id:'get-cron-cleanup', title:'Daily cleanup', method:'GET', path:'/cron/cleanup', role:'cron', intro:'Not for Client Systems. Vercel Cron calls it daily at 03:00 UTC with <code>Authorization: Bearer $CRON_SECRET</code>. It removes expired Temporary Files, discards uploads never confirmed after 24 hours and abandoned replacement uploads. Any other caller gets 401 and nothing changes.',
+{ id:'get-cron-cleanup', title:'Daily cleanup', method:'GET', path:'/cron/cleanup', role:'cron', intro:'Not for Client Systems. GitHub Actions calls it daily at 03:00 UTC with <code>Authorization: Bearer $CRON_SECRET</code>. It removes expired Temporary Files, discards uploads never confirmed after 24 hours and abandoned replacement uploads. Any other caller gets 401 and nothing changes.',
   responses:[['200','<code>{"expiredDeleted":0,"pendingDiscarded":0,"replacementsDiscarded":0,"failures":0}</code>'],['401','Wrong or missing secret'],['500','Some objects could not be removed (the body holds the counts); the next run retries']],
   example:`curl "$BASE_URL/cron/cleanup" -H "Authorization: Bearer $CRON_SECRET"
 # 200 {"expiredDeleted":3,"pendingDiscarded":1,"replacementsDiscarded":0,"failures":0}` }
