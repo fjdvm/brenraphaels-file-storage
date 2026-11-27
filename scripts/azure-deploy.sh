@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Create or update the file-storage Container App: scale-to-zero (min 0) because the
-# API is event-driven. Secrets come from the environment and are never echoed.
+# Create or update the file-storage Container App with min 1 replica so the API is always
+# warm (no cold starts). Secrets come from the environment and are never echoed.
 # Required: IMAGE, GHCR_USERNAME, GHCR_PULL_TOKEN, DATABASE_URL, GATEWAY_SECRET, CRON_SECRET,
 # R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_BUCKET, R2_PRIVATE_BUCKET, R2_PUBLIC_BASE_URL.
 set -euo pipefail
@@ -25,13 +25,13 @@ if az containerapp show -n "$APP" -g "$RG" >/dev/null 2>&1; then
   az containerapp registry set -n "$APP" -g "$RG" --server ghcr.io \
     --username "$GHCR_USERNAME" --password "$GHCR_PULL_TOKEN" >/dev/null
   az containerapp update -n "$APP" -g "$RG" --image "$IMAGE" \
-    --min-replicas 0 --max-replicas 2 --cpu 0.25 --memory 0.5Gi >/dev/null
+    --min-replicas 1 --max-replicas 2 --cpu 0.25 --memory 0.5Gi >/dev/null
 else
   az containerapp create -n "$APP" -g "$RG" --environment "$ENV_NAME" --image "$IMAGE" \
     --registry-server ghcr.io --registry-username "$GHCR_USERNAME" \
     --registry-password "$GHCR_PULL_TOKEN" \
     --ingress external --target-port 8080 --transport auto \
-    --min-replicas 0 --max-replicas 2 --cpu 0.25 --memory 0.5Gi \
+    --min-replicas 1 --max-replicas 2 --cpu 0.25 --memory 0.5Gi \
     --secrets "${SECRETS[@]}" >/dev/null
 fi
 

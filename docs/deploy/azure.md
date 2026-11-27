@@ -2,7 +2,7 @@
 
 Tracked by [Ticket#155](https://github.com/fjdvm/brenraphaels-authentication-microservice/issues/155) (Spec#138). Replaces the ACR-based plan in #31.
 
-Every push to `main` runs `.github/workflows/container.yml`: typecheck, tests, build the image, smoke-test it against a disposable Postgres (health, gateway secret, one authenticated upload request), then apply pending migrations, push to GHCR and deploy Container App `file-storage` in `rg-brenraphaels` / `cae-brenraphaels` with **min 0, max 2 replicas**. The first request after idle wakes a replica (cold start of a few seconds).
+Every push to `main` runs `.github/workflows/container.yml`: typecheck, tests, build the image, smoke-test it against a disposable Postgres (health, gateway secret, one authenticated upload request), then apply pending migrations, push to GHCR and deploy Container App `file-storage` in `rg-brenraphaels` / `cae-brenraphaels` with **min 1, max 2 replicas**, so one replica is always warm and requests do not hit cold starts.
 
 ## Repository secrets and variables
 
