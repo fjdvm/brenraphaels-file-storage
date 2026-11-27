@@ -98,7 +98,7 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy Container App (min 0 replicas)
+      - name: Deploy Container App (min 1 replica)
         id: deploy
         run: ./scripts/azure-deploy.sh
         env:
@@ -113,7 +113,7 @@ jobs:
           R2_PUBLIC_BUCKET: ${{ vars.R2_PUBLIC_BUCKET }}
           R2_PRIVATE_BUCKET: ${{ vars.R2_PRIVATE_BUCKET }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
-      - name: Verify health (wakes from zero) and scale settings
+      - name: Verify health and scale settings
         run: |
           for attempt in $(seq 1 30); do
             if curl --fail --silent "https://${{ steps.deploy.outputs.fqdn }}/health"; then break; fi
@@ -123,4 +123,4 @@ jobs:
           counts=$(az containerapp show -n file-storage -g rg-brenraphaels \
             --query "properties.template.scale.minReplicas" -o tsv)
           echo "min replicas: $counts"
-          test "$counts" = "0"
+          test "$counts" = "1"

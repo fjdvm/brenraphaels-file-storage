@@ -25,7 +25,7 @@ any failed, and the next run retries. Reads already treat expired Files as gone.
 The workflow also supports manual dispatch (`gh workflow run cleanup.yml`). Set the
 `FILE_STORAGE_URL` repository variable to the Azure HTTPS base address. Each run
 checks missing and incorrect secrets return 401, then requires HTTP 200 from the
-authenticated cleanup. Requests have time limits for scale-to-zero cold starts;
+authenticated cleanup. Requests have generous time limits in case a replica is restarting;
 cleanup is not automatically retried. Runs are serialized to avoid overlap.
 GitHub scheduled runs use the default branch and can be delayed by GitHub.
 Inspect failures in the Actions tab and rerun manually after resolving the cause.

@@ -36,7 +36,7 @@ jobs:
               --output /dev/null --write-out '%{http_code}' "${headers[@]}" "$url")
             [[ "$status" == 401 ]] || { echo "Expected 401 for $mode secret, received $status"; exit 1; }
           done
-          # Allow a scaled-to-zero replica time to wake. Do not retry a destructive cleanup.
+          # Generous timeouts cover a replica restart. Do not retry a destructive cleanup.
           status=$(curl --silent --show-error --connect-timeout 30 --max-time 300 \
             --output cleanup-result.json --write-out '%{http_code}' \
             -H "Authorization: Bearer $CRON_SECRET" "$url")
